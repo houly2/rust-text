@@ -342,7 +342,33 @@ impl Element for TextElement {
             underline: None,
             strikethrough: None,
         };
-        let runs = vec![run];
+
+        let runs = if let Some(marked_range) = input.marked_range.as_ref() {
+            vec![
+                TextRun {
+                    len: marked_range.start,
+                    ..run.clone()
+                },
+                TextRun {
+                    len: marked_range.end - marked_range.start,
+                    underline: Some(UnderlineStyle {
+                        color: Some(run.color),
+                        thickness: px(1.),
+                        wavy: false,
+                    }),
+                    ..run.clone()
+                },
+                TextRun {
+                    len: display_text.len() - marked_range.end,
+                    ..run.clone()
+                },
+            ]
+            .into_iter()
+            .filter(|run| run.len > 0)
+            .collect()
+        } else {
+            vec![run]
+        };
 
         let font_size = style.font_size.to_pixels(cx.rem_size());
         let line = cx
@@ -473,12 +499,28 @@ impl ViewInputHandler for TextInput {
 
     fn replace_and_mark_text_in_range(
         &mut self,
-        range: Option<std::ops::Range<usize>>,
+        range_utf16: Option<std::ops::Range<usize>>,
         new_text: &str,
-        new_selected_range: Option<std::ops::Range<usize>>,
+        new_selected_range_utf16: Option<std::ops::Range<usize>>,
         cx: &mut ViewContext<Self>,
     ) {
-        todo!("replace_and_mark_text_in_range")
+        let range = range_utf16
+            .as_ref()
+            .map(|range_utf16| self.range_from_utf16(range_utf16))
+            .or(self.marked_range.clone())
+            .unwrap_or(self.selected_range.clone());
+
+        self.content =
+            (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..])
+                .into();
+        self.marked_range = Some(range.start..range.start + new_text.len());
+        self.selected_range = new_selected_range_utf16
+            .as_ref()
+            .map(|range_utf16| self.range_from_utf16(range_utf16))
+            .map(|new_range| new_range.start + range.start..new_range.end + range.end)
+            .unwrap_or_else(|| range.start + new_text.len()..range.start + new_text.len());
+
+        cx.notify();
     }
 
     fn bounds_for_range(
