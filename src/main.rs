@@ -5,7 +5,15 @@ use gpui::*;
 
 actions!(
     text_input,
-    [Backspace, Left, Right, SelectLeft, SelectRight, SelectAll]
+    [
+        Backspace,
+        Left,
+        Right,
+        SelectLeft,
+        SelectRight,
+        SelectAll,
+        Delete
+    ]
 );
 
 struct TextInput {
@@ -22,6 +30,13 @@ impl TextInput {
     fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
         if self.selected_range.is_empty() {
             self.select_to(self.previous_boundary(self.cursor_offset()), cx);
+        }
+        self.replace_text_in_range(None, "", cx);
+    }
+
+    fn delete(&mut self, _: &Delete, cx: &mut ViewContext<Self>) {
+        if self.selected_range.is_empty() {
+            self.select_to(self.next_boundary(self.cursor_offset()), cx);
         }
         self.replace_text_in_range(None, "", cx);
     }
@@ -146,6 +161,7 @@ impl Render for TextInput {
             .track_focus(&self.focus_handle(cx))
             .cursor(CursorStyle::IBeam)
             .on_action(cx.listener(Self::backspace))
+            .on_action(cx.listener(Self::delete))
             .on_action(cx.listener(Self::left))
             .on_action(cx.listener(Self::right))
             .on_action(cx.listener(Self::select_left))
@@ -406,6 +422,7 @@ fn main() {
     App::new().run(|cx: &mut AppContext| {
         cx.bind_keys([
             KeyBinding::new("backspace", Backspace, None),
+            KeyBinding::new("delete", Delete, None),
             KeyBinding::new("left", Left, None),
             KeyBinding::new("right", Right, None),
             KeyBinding::new("shift-left", SelectLeft, None),
