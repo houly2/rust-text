@@ -14,7 +14,11 @@ actions!(
         SelectAll,
         Delete,
         Home,
-        End
+        End,
+        ShowCharacterPalette,
+        Copy,
+        Paste,
+        Cut
     ]
 );
 
@@ -26,6 +30,7 @@ struct TextInput {
     marked_range: Option<Range<usize>>,
     last_layout: Option<ShapedLine>,
     last_bounds: Option<Bounds<Pixels>>,
+    is_selecting: bool,
 }
 
 impl TextInput {
@@ -65,6 +70,77 @@ impl TextInput {
 
     fn end(&mut self, _: &End, cx: &mut ViewContext<Self>) {
         self.move_to(self.content.len(), cx);
+    }
+
+    fn copy(&mut self, _: &Copy, cx: &mut ViewContext<Self>) {
+        if !self.selected_range.is_empty() {
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                (&self.content[self.selected_range.clone()]).to_string(),
+            ));
+        }
+    }
+
+    fn paste(&mut self, _: &Paste, cx: &mut ViewContext<Self>) {
+        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+            self.replace_text_in_range(None, &text.replace("\n", " "), cx);
+        }
+    }
+
+    fn cut(&mut self, _: &Cut, cx: &mut ViewContext<Self>) {
+        if !self.selected_range.is_empty() {
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                (&self.content[self.selected_range.clone()]).to_string(),
+            ));
+            self.replace_text_in_range(None, "", cx);
+        }
+    }
+
+    fn on_mouse_down(&mut self, event: &MouseDownEvent, cx: &mut ViewContext<Self>) {
+        self.is_selecting = true;
+
+        if event.modifiers.shift {
+            self.select_to(self.index_for_mouse_position(event.position), cx);
+        } else if event.click_count == 2 {
+            todo!("select word");
+        } else if event.click_count == 3 {
+            todo!("select line");
+        } else {
+            self.move_to(self.index_for_mouse_position(event.position), cx)
+        }
+    }
+
+    fn on_mouse_up(&mut self, event: &MouseUpEvent, cx: &mut ViewContext<Self>) {
+        self.is_selecting = false;
+    }
+
+    fn on_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut ViewContext<Self>) {
+        if self.is_selecting {
+            self.select_to(self.index_for_mouse_position(event.position), cx);
+        }
+    }
+
+    fn index_for_mouse_position(&self, position: Point<Pixels>) -> usize {
+        if self.content.is_empty() {
+            return 0;
+        }
+
+        let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
+        else {
+            return 0;
+        };
+
+        if position.y < bounds.top() {
+            return 0;
+        }
+        if position.y > bounds.bottom() {
+            return self.content.len();
+        }
+
+        line.closest_index_for_x(position.x - bounds.left())
+    }
+
+    fn show_character_palette(&mut self, _: &ShowCharacterPalette, cx: &mut ViewContext<Self>) {
+        cx.show_character_palette();
     }
 
     fn select_left(&mut self, _: &SelectLeft, cx: &mut ViewContext<Self>) {
@@ -179,6 +255,14 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::select_left))
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::select_all))
+            .on_action(cx.listener(Self::show_character_palette))
+            .on_action(cx.listener(Self::copy))
+            .on_action(cx.listener(Self::paste))
+            .on_action(cx.listener(Self::cut))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_mouse_move(cx.listener(Self::on_mouse_move))
             .child(
                 div()
                     .h(px(30. + 4. * 2.))
@@ -400,10 +484,22 @@ impl ViewInputHandler for TextInput {
     fn bounds_for_range(
         &mut self,
         range_utf16: std::ops::Range<usize>,
-        element_bounds: Bounds<Pixels>,
+        bounds: Bounds<Pixels>,
         cx: &mut ViewContext<Self>,
     ) -> Option<Bounds<Pixels>> {
-        todo!("bounds_for_range")
+        let last_layout = self.last_layout.as_ref()?;
+        let range = self.range_from_utf16(&range_utf16);
+
+        Some(Bounds::from_corners(
+            point(
+                bounds.left() + last_layout.x_for_index(range.start),
+                bounds.top(),
+            ),
+            point(
+                bounds.left() + last_layout.x_for_index(range.end),
+                bounds.bottom(),
+            ),
+        ))
     }
 }
 
@@ -441,6 +537,10 @@ fn main() {
             KeyBinding::new("shift-left", SelectLeft, None),
             KeyBinding::new("shift-right", SelectRight, None),
             KeyBinding::new("cmd-a", SelectAll, None),
+            KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, None),
+            KeyBinding::new("cmd-c", Copy, None),
+            KeyBinding::new("cmd-v", Paste, None),
+            KeyBinding::new("cmd-x", Cut, None),
         ]);
 
         let window = cx
@@ -453,6 +553,7 @@ fn main() {
                     marked_range: None,
                     last_layout: None,
                     last_bounds: None,
+                    is_selecting: false,
                 });
                 cx.new_view(|cx| InputExample {
                     text_input,
@@ -460,15 +561,6 @@ fn main() {
                 })
             })
             .unwrap();
-
-        // cx.observe_keystrokes(move |ev, cx| {
-        //     window
-        //         .update(cx, |view, cx| {
-        //             cx.notify();
-        //         })
-        //         .unwrap()
-        // })
-        // .detach();
 
         cx.on_keyboard_layout_change({
             move |cx| {
