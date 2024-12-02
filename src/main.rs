@@ -12,7 +12,9 @@ actions!(
         SelectLeft,
         SelectRight,
         SelectAll,
-        Delete
+        Delete,
+        Home,
+        End
     ]
 );
 
@@ -55,6 +57,14 @@ impl TextInput {
         } else {
             self.move_to(self.selected_range.end, cx)
         }
+    }
+
+    fn home(&mut self, _: &Home, cx: &mut ViewContext<Self>) {
+        self.move_to(0, cx);
+    }
+
+    fn end(&mut self, _: &End, cx: &mut ViewContext<Self>) {
+        self.move_to(self.content.len(), cx);
     }
 
     fn select_left(&mut self, _: &SelectLeft, cx: &mut ViewContext<Self>) {
@@ -164,6 +174,8 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::delete))
             .on_action(cx.listener(Self::left))
             .on_action(cx.listener(Self::right))
+            .on_action(cx.listener(Self::home))
+            .on_action(cx.listener(Self::end))
             .on_action(cx.listener(Self::select_left))
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::select_all))
@@ -382,8 +394,7 @@ impl ViewInputHandler for TextInput {
         new_selected_range: Option<std::ops::Range<usize>>,
         cx: &mut ViewContext<Self>,
     ) {
-        println!("arg");
-        cx.notify();
+        todo!("replace_and_mark_text_in_range")
     }
 
     fn bounds_for_range(
@@ -392,7 +403,7 @@ impl ViewInputHandler for TextInput {
         element_bounds: Bounds<Pixels>,
         cx: &mut ViewContext<Self>,
     ) -> Option<Bounds<Pixels>> {
-        todo!()
+        todo!("bounds_for_range")
     }
 }
 
@@ -425,6 +436,8 @@ fn main() {
             KeyBinding::new("delete", Delete, None),
             KeyBinding::new("left", Left, None),
             KeyBinding::new("right", Right, None),
+            KeyBinding::new("home", Home, None),
+            KeyBinding::new("end", End, None),
             KeyBinding::new("shift-left", SelectLeft, None),
             KeyBinding::new("shift-right", SelectRight, None),
             KeyBinding::new("cmd-a", SelectAll, None),
