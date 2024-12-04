@@ -5,6 +5,12 @@ mod text_input;
 
 use crate::text_input::*;
 
+actions!(set_menus, [Quit]);
+
+fn quit(_: &Quit, cx: &mut AppContext) {
+    cx.quit();
+}
+
 struct InputExample {
     text_input: View<TextInput>,
     focus_handle: FocusHandle,
@@ -78,6 +84,12 @@ fn main() {
             }
         })
         .detach();
+
+        cx.on_action(quit);
+        cx.set_menus(vec![Menu {
+            name: "set_menus".into(),
+            items: vec![MenuItem::action("Quit", Quit)],
+        }]);
 
         window
             .update(cx, |view, cx| {
