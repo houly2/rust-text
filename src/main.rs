@@ -109,7 +109,7 @@ impl TextInput {
         }
     }
 
-    fn on_mouse_up(&mut self, event: &MouseUpEvent, cx: &mut ViewContext<Self>) {
+    fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut ViewContext<Self>) {
         self.is_selecting = false;
     }
 
@@ -277,7 +277,7 @@ impl Render for TextInput {
 }
 
 impl FocusableView for TextInput {
-    fn focus_handle(&self, cx: &AppContext) -> FocusHandle {
+    fn focus_handle(&self, _: &AppContext) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
@@ -309,7 +309,7 @@ impl Element for TextElement {
 
     fn request_layout(
         &mut self,
-        id: Option<&GlobalElementId>,
+        _: Option<&GlobalElementId>,
         cx: &mut WindowContext,
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
@@ -320,9 +320,9 @@ impl Element for TextElement {
 
     fn prepaint(
         &mut self,
-        id: Option<&GlobalElementId>,
+        _: Option<&GlobalElementId>,
         bounds: Bounds<Pixels>,
-        request_layout: &mut Self::RequestLayoutState,
+        _: &mut Self::RequestLayoutState,
         cx: &mut WindowContext,
     ) -> Self::PrepaintState {
         let input = self.input.read(cx);
@@ -416,9 +416,9 @@ impl Element for TextElement {
 
     fn paint(
         &mut self,
-        id: Option<&GlobalElementId>,
+        _: Option<&GlobalElementId>,
         bounds: Bounds<Pixels>,
-        request_layout: &mut Self::RequestLayoutState,
+        _: &mut Self::RequestLayoutState,
         prepaint: &mut Self::PrepaintState,
         cx: &mut WindowContext,
     ) {
@@ -451,7 +451,7 @@ impl ViewInputHandler for TextInput {
         &mut self,
         range_utf16: std::ops::Range<usize>,
         actual_range: &mut Option<std::ops::Range<usize>>,
-        cx: &mut ViewContext<Self>,
+        _: &mut ViewContext<Self>,
     ) -> Option<String> {
         let range = self.range_from_utf16(&range_utf16);
         actual_range.replace(self.range_to_utf16(&range));
@@ -460,8 +460,8 @@ impl ViewInputHandler for TextInput {
 
     fn selected_text_range(
         &mut self,
-        ignore_disabled_input: bool,
-        cx: &mut ViewContext<Self>,
+        _: bool,
+        _: &mut ViewContext<Self>,
     ) -> Option<UTF16Selection> {
         Some(UTF16Selection {
             range: self.range_to_utf16(&self.selected_range),
@@ -469,13 +469,13 @@ impl ViewInputHandler for TextInput {
         })
     }
 
-    fn marked_text_range(&self, cx: &mut ViewContext<Self>) -> Option<std::ops::Range<usize>> {
+    fn marked_text_range(&self, _: &mut ViewContext<Self>) -> Option<std::ops::Range<usize>> {
         self.marked_range
             .as_ref()
             .map(|range| self.range_to_utf16(range))
     }
 
-    fn unmark_text(&mut self, cx: &mut ViewContext<Self>) {
+    fn unmark_text(&mut self, _: &mut ViewContext<Self>) {
         self.marked_range = None;
     }
 
@@ -527,7 +527,7 @@ impl ViewInputHandler for TextInput {
         &mut self,
         range_utf16: std::ops::Range<usize>,
         bounds: Bounds<Pixels>,
-        cx: &mut ViewContext<Self>,
+        _: &mut ViewContext<Self>,
     ) -> Option<Bounds<Pixels>> {
         let last_layout = self.last_layout.as_ref()?;
         let range = self.range_from_utf16(&range_utf16);
@@ -551,13 +551,13 @@ struct InputExample {
 }
 
 impl FocusableView for InputExample {
-    fn focus_handle(&self, cx: &AppContext) -> FocusHandle {
+    fn focus_handle(&self, _: &AppContext) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
 impl Render for InputExample {
-    fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut ViewContext<Self>) -> impl IntoElement {
         div()
             .bg(rgb(0xaaaaaa))
             .flex()
