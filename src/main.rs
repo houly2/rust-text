@@ -109,9 +109,14 @@ impl TextInput {
         if event.modifiers.shift {
             self.select_to(self.index_for_mouse_position(event.position), cx);
         } else if event.click_count == 2 {
-            todo!("select word");
+            let offset = self.index_for_mouse_position(event.position);
+            let prev = self.start_of_word(offset);
+            let next = self.end_of_word(offset);
+            self.move_to(next, cx);
+            self.select_to(prev, cx);
         } else if event.click_count == 3 {
-            todo!("select line");
+            self.move_to(self.content.len(), cx);
+            self.select_to(0, cx);
         } else {
             self.move_to(self.index_for_mouse_position(event.position), cx)
         }
