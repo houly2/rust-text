@@ -18,7 +18,15 @@ actions!(
         ShowCharacterPalette,
         Copy,
         Paste,
-        Cut
+        Cut,
+        MoveToWordStart,
+        MoveToWordEnd,
+        MoveToLineStart,
+        MoveToLineEnd,
+        SelectWordStart,
+        SelectWordEnd,
+        SelectLineStart,
+        SelectLineEnd,
     ]
 );
 
@@ -156,6 +164,38 @@ impl TextInput {
         self.select_to(self.content.len(), cx);
     }
 
+    fn select_word_start(&mut self, _: &SelectWordStart, cx: &mut ViewContext<Self>) {
+        self.select_to(self.start_of_word(self.cursor_offset()), cx);
+    }
+
+    fn select_word_end(&mut self, _: &SelectWordEnd, cx: &mut ViewContext<Self>) {
+        self.select_to(self.end_of_word(self.cursor_offset()), cx);
+    }
+
+    fn select_line_start(&mut self, _: &SelectLineStart, cx: &mut ViewContext<Self>) {
+        self.select_to(0, cx);
+    }
+
+    fn select_line_end(&mut self, _: &SelectLineEnd, cx: &mut ViewContext<Self>) {
+        self.select_to(self.content.len(), cx);
+    }
+
+    fn move_to_word_start(&mut self, _: &MoveToWordStart, cx: &mut ViewContext<Self>) {
+        self.move_to(self.start_of_word(self.cursor_offset()), cx)
+    }
+
+    fn move_to_word_end(&mut self, _: &MoveToWordEnd, cx: &mut ViewContext<Self>) {
+        self.move_to(self.end_of_word(self.cursor_offset()), cx)
+    }
+
+    fn move_to_line_start(&mut self, _: &MoveToLineStart, cx: &mut ViewContext<Self>) {
+        self.move_to(0, cx)
+    }
+
+    fn move_to_line_end(&mut self, _: &MoveToLineEnd, cx: &mut ViewContext<Self>) {
+        self.move_to(self.content.len(), cx)
+    }
+
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
         cx.notify();
@@ -220,6 +260,21 @@ impl TextInput {
         self.offset_from_utf16(range_utf16.start)..self.offset_from_utf16(range_utf16.end)
     }
 
+    fn start_of_word(&self, offset: usize) -> usize {
+        self.content
+            .split_word_bound_indices()
+            .rev()
+            .find_map(|(idx, _)| (idx < offset).then_some(idx))
+            .unwrap_or(0)
+    }
+
+    fn end_of_word(&self, offset: usize) -> usize {
+        self.content
+            .split_word_bound_indices()
+            .find_map(|(idx, _)| (idx > offset).then_some(idx))
+            .unwrap_or(self.content.len())
+    }
+
     fn previous_boundary(&self, offset: usize) -> usize {
         self.content
             .grapheme_indices(true)
@@ -259,6 +314,14 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(Self::cut))
+            .on_action(cx.listener(Self::move_to_word_start))
+            .on_action(cx.listener(Self::move_to_word_end))
+            .on_action(cx.listener(Self::move_to_line_start))
+            .on_action(cx.listener(Self::move_to_line_end))
+            .on_action(cx.listener(Self::select_word_start))
+            .on_action(cx.listener(Self::select_word_end))
+            .on_action(cx.listener(Self::select_line_start))
+            .on_action(cx.listener(Self::select_line_end))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
@@ -583,6 +646,14 @@ fn main() {
             KeyBinding::new("cmd-c", Copy, None),
             KeyBinding::new("cmd-v", Paste, None),
             KeyBinding::new("cmd-x", Cut, None),
+            KeyBinding::new("alt-left", MoveToWordStart, None),
+            KeyBinding::new("alt-right", MoveToWordEnd, None),
+            KeyBinding::new("cmd-left", MoveToLineStart, None),
+            KeyBinding::new("cmd-right", MoveToLineEnd, None),
+            KeyBinding::new("shift-alt-left", SelectWordStart, None),
+            KeyBinding::new("shift-alt-right", SelectWordEnd, None),
+            KeyBinding::new("shift-cmd-left", SelectLineStart, None),
+            KeyBinding::new("shift-cmd-right", SelectLineEnd, None),
         ]);
 
         let window = cx
