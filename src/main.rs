@@ -26,10 +26,11 @@ impl FocusableView for InputExample {
 impl Render for InputExample {
     fn render(&mut self, _: &mut ViewContext<Self>) -> impl IntoElement {
         div()
-            .bg(rgb(0xaaaaaa))
+            .bg(rgb(0x1a1a29))
             .flex()
             .flex_col()
             .size_full()
+            .child(div().h(px(32.)))
             .child(self.text_input.clone())
     }
 }
@@ -61,13 +62,23 @@ fn main() {
         ]);
 
         let window = cx
-            .open_window(WindowOptions::default(), |cx| {
-                let text_input = cx.new_view(|cx| TextInput::new(cx));
-                cx.new_view(|cx| InputExample {
-                    text_input,
-                    focus_handle: cx.focus_handle(),
-                })
-            })
+            .open_window(
+                WindowOptions {
+                    titlebar: Some(TitlebarOptions {
+                        title: None,
+                        appears_transparent: true,
+                        traffic_light_position: Some(point(px(9.0), px(9.0))),
+                    }),
+                    ..Default::default()
+                },
+                |cx| {
+                    let text_input = cx.new_view(|cx| TextInput::new(cx));
+                    cx.new_view(|cx| InputExample {
+                        text_input,
+                        focus_handle: cx.focus_handle(),
+                    })
+                },
+            )
             .unwrap();
 
         cx.on_keyboard_layout_change({

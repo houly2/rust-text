@@ -335,7 +335,6 @@ impl Render for TextInput {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
             .flex()
-            .bg(black())
             .line_height(px(30.))
             .text_size(px(24.))
             .key_context("TextInput")
@@ -371,7 +370,8 @@ impl Render for TextInput {
                     .h(px(30. + 4. * 2.))
                     .w_full()
                     .p(px(4.))
-                    .bg(white())
+                    .bg(rgb(0x1e1e2e))
+                    .text_color(rgb(0xcdd6f4))
                     .child(TextElement {
                         input: cx.view().clone(),
                     }),
