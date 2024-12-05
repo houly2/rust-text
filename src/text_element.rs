@@ -96,35 +96,39 @@ impl Element for TextElement {
             .unwrap();
 
         let cursor_pos = line.x_for_index(cursor);
-        let (selection, cursor) = if selected_range.is_empty() {
-            (
-                None,
-                Some(fill(
+
+        let selection: Option<PaintQuad>;
+        let cursor: Option<PaintQuad>;
+
+        if selected_range.is_empty() {
+            selection = None;
+            if input.blink_manager.read(cx).show() {
+                cursor = Some(fill(
                     Bounds::new(
                         point(bounds.left() + cursor_pos, bounds.top()),
                         size(px(2.), bounds.bottom() - bounds.top()),
                     ),
                     blue(),
-                )),
-            )
+                ));
+            } else {
+                cursor = None;
+            }
         } else {
-            (
-                Some(fill(
-                    Bounds::from_corners(
-                        point(
-                            bounds.left() + line.x_for_index(selected_range.start),
-                            bounds.top(),
-                        ),
-                        point(
-                            bounds.left() + line.x_for_index(selected_range.end),
-                            bounds.bottom(),
-                        ),
+            cursor = None;
+            selection = Some(fill(
+                Bounds::from_corners(
+                    point(
+                        bounds.left() + line.x_for_index(selected_range.start),
+                        bounds.top(),
                     ),
-                    rgba(0x3311ff30),
-                )),
-                None,
-            )
-        };
+                    point(
+                        bounds.left() + line.x_for_index(selected_range.end),
+                        bounds.bottom(),
+                    ),
+                ),
+                rgba(0x3311ff30),
+            ));
+        }
 
         PrepaintState {
             line: Some(line),
@@ -152,10 +156,8 @@ impl Element for TextElement {
         let line = prepaint.line.take().unwrap();
         line.paint(bounds.origin, cx.line_height(), cx).unwrap();
 
-        if focus_handle.is_focused(cx) {
-            if let Some(cursor) = prepaint.cursor.take() {
-                cx.paint_quad(cursor);
-            }
+        if let Some(cursor) = prepaint.cursor.take() {
+            cx.paint_quad(cursor);
         }
 
         self.input.update(cx, |input, _cx| {

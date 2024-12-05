@@ -1,4 +1,4 @@
-use crate::text_element::TextElement;
+use crate::{blink_manager::BlinkManager, text_element::TextElement};
 
 use std::ops::Range;
 use unicode_segmentation::*;
@@ -36,14 +36,47 @@ pub struct TextInput {
     pub focus_handle: FocusHandle,
     pub content: SharedString,
     pub selected_range: Range<usize>,
-    pub selection_reversed: bool,
+    selection_reversed: bool,
     pub marked_range: Option<Range<usize>>,
     pub last_layout: Option<ShapedLine>,
     pub last_bounds: Option<Bounds<Pixels>>,
-    pub is_selecting: bool,
+    is_selecting: bool,
+
+    pub blink_manager: Model<BlinkManager>,
+
+    _subscriptions: Vec<Subscription>,
 }
 
 impl TextInput {
+    pub fn new(cx: &mut ViewContext<Self>) -> Self {
+        let blink_manager = cx.new_model(|_| BlinkManager::new());
+
+        Self {
+            focus_handle: cx.focus_handle(),
+            content: "".into(),
+            selected_range: 0..0,
+            selection_reversed: false,
+            marked_range: None,
+            last_layout: None,
+            last_bounds: None,
+            is_selecting: false,
+            blink_manager: blink_manager.clone(),
+            _subscriptions: vec![
+                cx.observe(&blink_manager, |_, _, cx| cx.notify()),
+                cx.observe_window_activation(|this, cx| {
+                    let active = cx.is_window_active();
+                    this.blink_manager.update(cx, |blink_manager, cx| {
+                        if active {
+                            blink_manager.enable(cx);
+                        } else {
+                            blink_manager.disable(cx);
+                        }
+                    });
+                }),
+            ],
+        }
+    }
+
     fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
         if self.selected_range.is_empty() {
             self.select_to(self.previous_boundary(self.cursor_offset()), cx);
@@ -400,6 +433,9 @@ impl ViewInputHandler for TextInput {
             (self.content[0..range.start].to_owned() + text + &self.content[range.end..]).into();
         self.selected_range = range.start + text.len()..range.start + text.len();
         self.marked_range.take();
+
+        self.blink_manager.update(cx, BlinkManager::pause);
+
         cx.notify();
     }
 

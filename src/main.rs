@@ -1,5 +1,6 @@
 use gpui::*;
 
+mod blink_manager;
 mod text_element;
 mod text_input;
 
@@ -61,16 +62,7 @@ fn main() {
 
         let window = cx
             .open_window(WindowOptions::default(), |cx| {
-                let text_input = cx.new_view(|cx| TextInput {
-                    focus_handle: cx.focus_handle(),
-                    content: "".into(),
-                    selected_range: 0..0,
-                    selection_reversed: false,
-                    marked_range: None,
-                    last_layout: None,
-                    last_bounds: None,
-                    is_selecting: false,
-                });
+                let text_input = cx.new_view(|cx| TextInput::new(cx));
                 cx.new_view(|cx| InputExample {
                     text_input,
                     focus_handle: cx.focus_handle(),
