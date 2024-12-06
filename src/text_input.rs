@@ -1,9 +1,9 @@
 use crate::{blink_manager::BlinkManager, text_element::TextElement};
 
+use gpui::*;
+use ropey::*;
 use std::ops::Range;
 use unicode_segmentation::*;
-
-use gpui::*;
 
 actions!(
     text_input,
@@ -34,7 +34,8 @@ actions!(
 
 pub struct TextInput {
     pub focus_handle: FocusHandle,
-    pub content: SharedString,
+    pub content: Rope,
+    // pub content: SharedString,
     pub selected_range: Range<usize>,
     selection_reversed: bool,
     pub marked_range: Option<Range<usize>>,
@@ -112,13 +113,13 @@ impl TextInput {
     }
 
     fn end(&mut self, _: &End, cx: &mut ViewContext<Self>) {
-        self.move_to(self.content.len(), cx);
+        self.move_to(self.content.len_chars(), cx);
     }
 
     fn copy(&mut self, _: &Copy, cx: &mut ViewContext<Self>) {
         if !self.selected_range.is_empty() {
             cx.write_to_clipboard(ClipboardItem::new_string(
-                (&self.content[self.selected_range.clone()]).to_string(),
+                self.content.slice(self.selected_range.clone()).to_string(),
             ));
         }
     }
@@ -132,7 +133,7 @@ impl TextInput {
     fn cut(&mut self, _: &Cut, cx: &mut ViewContext<Self>) {
         if !self.selected_range.is_empty() {
             cx.write_to_clipboard(ClipboardItem::new_string(
-                (&self.content[self.selected_range.clone()]).to_string(),
+                self.content.slice(self.selected_range.clone()).to_string(),
             ));
             self.replace_text_in_range(None, "", cx);
         }
@@ -150,7 +151,7 @@ impl TextInput {
             self.move_to(next, cx);
             self.select_to(prev, cx);
         } else if event.click_count == 3 {
-            self.move_to(self.content.len(), cx);
+            self.move_to(self.content.len_chars(), cx);
             self.select_to(0, cx);
         } else {
             self.move_to(self.index_for_mouse_position(event.position), cx)
@@ -168,7 +169,7 @@ impl TextInput {
     }
 
     fn index_for_mouse_position(&self, position: Point<Pixels>) -> usize {
-        if self.content.is_empty() {
+        if self.content.len_chars() == 0 {
             return 0;
         }
 
@@ -181,10 +182,11 @@ impl TextInput {
             return 0;
         }
         if position.y > bounds.bottom() {
-            return self.content.len();
+            return self.content.len_chars();
         }
 
-        line.closest_index_for_x(position.x - bounds.left())
+        self.content
+            .byte_to_char(line.closest_index_for_x(position.x - bounds.left()))
     }
 
     fn show_character_palette(&mut self, _: &ShowCharacterPalette, cx: &mut ViewContext<Self>) {
@@ -201,7 +203,7 @@ impl TextInput {
 
     fn select_all(&mut self, _: &SelectAll, cx: &mut ViewContext<Self>) {
         self.move_to(0, cx);
-        self.select_to(self.content.len(), cx);
+        self.select_to(self.content.len_chars(), cx);
     }
 
     fn select_word_start(&mut self, _: &SelectWordStart, cx: &mut ViewContext<Self>) {
@@ -217,7 +219,7 @@ impl TextInput {
     }
 
     fn select_line_end(&mut self, _: &SelectLineEnd, cx: &mut ViewContext<Self>) {
-        self.select_to(self.content.len(), cx);
+        self.select_to(self.content.len_chars(), cx);
     }
 
     fn move_to_word_start(&mut self, _: &MoveToWordStart, cx: &mut ViewContext<Self>) {
@@ -233,7 +235,7 @@ impl TextInput {
     }
 
     fn move_to_line_end(&mut self, _: &MoveToLineEnd, cx: &mut ViewContext<Self>) {
-        self.move_to(self.content.len(), cx)
+        self.move_to(self.content.len_chars(), cx)
     }
 
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
@@ -254,7 +256,7 @@ impl TextInput {
         if self.selection_reversed {
             self.selected_range.start = offset
         } else {
-            self.selected_range.end = offset
+            self.selected_range.end = offset;
         }
 
         if self.selected_range.end < self.selected_range.start {
@@ -302,33 +304,54 @@ impl TextInput {
     }
 
     fn start_of_word(&self, offset: usize) -> usize {
-        self.content
-            .split_word_bound_indices()
+        let c = self.content.char_to_byte(self.previous_boundary(offset));
+        let t = self
+            .content
+            .to_string()
+            .unicode_word_indices()
             .rev()
-            .find_map(|(idx, _)| (idx < offset).then_some(idx))
-            .unwrap_or(0)
+            .find_map(|(idx, _)| (idx < c).then_some(idx))
+            .unwrap_or(0);
+
+        return self.content.byte_to_char(t);
     }
 
     fn end_of_word(&self, offset: usize) -> usize {
-        self.content
-            .split_word_bound_indices()
-            .find_map(|(idx, _)| (idx > offset).then_some(idx))
-            .unwrap_or(self.content.len())
+        let mut skip = 0;
+        for charr in self.content.chars_at(offset) {
+            if charr != ' ' {
+                break;
+            }
+            skip += 1;
+        }
+
+        let c = self.content.char_to_byte(offset + skip);
+
+        let t = self
+            .content
+            .to_string()
+            .unicode_word_indices()
+            .rev()
+            .find_map(|(idx, word)| (idx <= c).then_some(idx + word.len()))
+            .unwrap_or(0);
+
+        return self.content.byte_to_char(t);
     }
 
     fn previous_boundary(&self, offset: usize) -> usize {
-        self.content
-            .grapheme_indices(true)
-            .rev()
-            .find_map(|(idx, _)| (idx < offset).then_some(idx))
-            .unwrap_or(0)
+        if offset > 0 {
+            offset - 1
+        } else {
+            0
+        }
     }
 
     fn next_boundary(&self, offset: usize) -> usize {
-        self.content
-            .grapheme_indices(true)
-            .find_map(|(idx, _)| (idx > offset).then_some(idx))
-            .unwrap_or(self.content.len())
+        if offset < self.content.len_chars() {
+            offset + 1
+        } else {
+            self.content.len_chars()
+        }
     }
 }
 
@@ -377,9 +400,7 @@ impl Render for TextInput {
                     .text_size(px(18.))
                     .text_color(rgb(0xcdd6f4))
                     .font_family("Iosevka")
-                    .child(TextElement {
-                        input: cx.view().clone(),
-                    }),
+                    .child(TextElement::new(cx.view().clone())),
             )
     }
 }
@@ -399,7 +420,7 @@ impl ViewInputHandler for TextInput {
     ) -> Option<String> {
         let range = self.range_from_utf16(&range_utf16);
         actual_range.replace(self.range_to_utf16(&range));
-        Some(self.content[range].to_string())
+        Some(self.content.slice(range).to_string())
     }
 
     fn selected_text_range(
@@ -430,13 +451,14 @@ impl ViewInputHandler for TextInput {
         cx: &mut ViewContext<Self>,
     ) {
         let range = range_utf16
-            .as_ref()
-            .map(|range_utf16| self.range_from_utf16(range_utf16))
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
-        self.content =
-            (self.content[0..range.start].to_owned() + text + &self.content[range.end..]).into();
-        self.selected_range = range.start + text.len()..range.start + text.len();
+
+        self.content.remove(range.start..range.end);
+        self.content.insert(range.start, text);
+
+        let l = text.chars().count();
+        self.selected_range = range.start + l..range.start + l;
         self.marked_range.take();
 
         self.blink_manager.update(cx, BlinkManager::pause);
@@ -457,16 +479,15 @@ impl ViewInputHandler for TextInput {
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
 
-        self.content =
-            (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..])
-                .into();
-        self.marked_range = Some(range.start..range.start + new_text.len());
+        self.content.remove(range.start..range.end);
+        self.content.insert(range.start, new_text);
+
+        let l = new_text.chars().count();
+        self.marked_range = Some(range.start..range.start + l);
         self.selected_range = new_selected_range_utf16
             .as_ref()
-            .map(|range_utf16| self.range_from_utf16(range_utf16))
             .map(|new_range| new_range.start + range.start..new_range.end + range.end)
-            .unwrap_or_else(|| range.start + new_text.len()..range.start + new_text.len());
-
+            .unwrap_or_else(|| range.start + l..range.start + l);
         cx.notify();
     }
 
@@ -476,6 +497,7 @@ impl ViewInputHandler for TextInput {
         bounds: Bounds<Pixels>,
         _: &mut ViewContext<Self>,
     ) -> Option<Bounds<Pixels>> {
+        println!("bounds_for_range");
         let last_layout = self.last_layout.as_ref()?;
         let range = self.range_from_utf16(&range_utf16);
 

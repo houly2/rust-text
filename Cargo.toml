@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed" }
-unicode-segmentation = "1.10"
+unicode-segmentation = "1.12"
+ropey = "1.6.1"

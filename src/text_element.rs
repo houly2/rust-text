@@ -2,7 +2,13 @@ use crate::text_input::TextInput;
 use gpui::*;
 
 pub struct TextElement {
-    pub input: View<TextInput>,
+    input: View<TextInput>,
+}
+
+impl TextElement {
+    pub fn new(input: View<TextInput>) -> Self {
+        Self { input }
+    }
 }
 
 pub struct PrepaintState {
@@ -45,16 +51,13 @@ impl Element for TextElement {
         cx: &mut WindowContext,
     ) -> Self::PrepaintState {
         let input = self.input.read(cx);
-        let content = input.content.clone();
         let selected_range = input.selected_range.clone();
         let cursor = input.cursor_offset();
         let style = cx.text_style();
-
-        let display_text = content.clone();
         let text_color = style.color;
 
         let run = TextRun {
-            len: display_text.len(),
+            len: input.content.len_bytes(),
             font: style.font(),
             color: text_color,
             background_color: None,
@@ -78,7 +81,7 @@ impl Element for TextElement {
                     ..run.clone()
                 },
                 TextRun {
-                    len: display_text.len() - marked_range.end,
+                    len: input.content.len_bytes() - marked_range.end,
                     ..run.clone()
                 },
             ]
@@ -90,20 +93,23 @@ impl Element for TextElement {
         };
 
         let font_size = style.font_size.to_pixels(cx.rem_size());
+        let display_text = input.content.clone();
+        let text: SharedString = display_text.to_string().into();
+
         let line = cx
             .text_system()
-            .shape_line(display_text, font_size, &runs)
+            .shape_line(text.clone(), font_size, &runs)
             .unwrap();
 
-        let cursor_pos = line.x_for_index(cursor);
-
         let selection: Option<PaintQuad>;
-        let cursor: Option<PaintQuad>;
+        let paint_cursor: Option<PaintQuad>;
 
         if selected_range.is_empty() {
             selection = None;
             if input.blink_manager.read(cx).show() {
-                cursor = Some(fill(
+                let cursor_pos = line.x_for_index(display_text.char_to_byte(cursor));
+
+                paint_cursor = Some(fill(
                     Bounds::new(
                         point(bounds.left() + cursor_pos, bounds.top()),
                         size(px(2.), bounds.bottom() - bounds.top()),
@@ -111,20 +117,18 @@ impl Element for TextElement {
                     rgb(0xcdd6f4),
                 ));
             } else {
-                cursor = None;
+                paint_cursor = None;
             }
         } else {
-            cursor = None;
+            paint_cursor = None;
+
+            let start = display_text.char_to_byte(selected_range.start);
+            let end = display_text.char_to_byte(selected_range.end);
+
             selection = Some(fill(
                 Bounds::from_corners(
-                    point(
-                        bounds.left() + line.x_for_index(selected_range.start),
-                        bounds.top(),
-                    ),
-                    point(
-                        bounds.left() + line.x_for_index(selected_range.end),
-                        bounds.bottom(),
-                    ),
+                    point(bounds.left() + line.x_for_index(start), bounds.top()),
+                    point(bounds.left() + line.x_for_index(end), bounds.bottom()),
                 ),
                 rgba(0x7f849c64),
             ));
@@ -132,7 +136,7 @@ impl Element for TextElement {
 
         PrepaintState {
             line: Some(line),
-            cursor,
+            cursor: paint_cursor,
             selection,
         }
     }
