@@ -238,6 +238,7 @@ impl TextInput {
 
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
+        self.blink_manager.update(cx, BlinkManager::pause);
         cx.notify();
     }
 
