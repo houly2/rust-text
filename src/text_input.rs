@@ -373,6 +373,7 @@ impl Render for TextInput {
                     .p(px(4.))
                     .bg(rgb(0x1e1e2e))
                     .text_color(rgb(0xcdd6f4))
+                    .font_family("Iosevka")
                     .child(TextElement {
                         input: cx.view().clone(),
                     }),
