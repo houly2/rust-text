@@ -104,24 +104,23 @@ impl Element for TextElement {
         let selection: Option<PaintQuad>;
         let paint_cursor: Option<PaintQuad>;
 
-        if selected_range.is_empty() {
-            selection = None;
-            if input.blink_manager.read(cx).show() {
-                let cursor_pos = line.x_for_index(display_text.char_to_byte(cursor));
+        if input.blink_manager.read(cx).show() {
+            let cursor_pos = line.x_for_index(display_text.char_to_byte(cursor));
 
-                paint_cursor = Some(fill(
-                    Bounds::new(
-                        point(bounds.left() + cursor_pos, bounds.top()),
-                        size(px(2.), bounds.bottom() - bounds.top()),
-                    ),
-                    rgb(0xcdd6f4),
-                ));
-            } else {
-                paint_cursor = None;
-            }
+            paint_cursor = Some(fill(
+                Bounds::new(
+                    point(bounds.left() + cursor_pos, bounds.top()),
+                    size(px(2.), bounds.bottom() - bounds.top()),
+                ),
+                rgb(0xcdd6f4),
+            ));
         } else {
             paint_cursor = None;
+        }
 
+        if selected_range.is_empty() {
+            selection = None;
+        } else {
             let start = display_text.char_to_byte(selected_range.start);
             let end = display_text.char_to_byte(selected_range.end);
 
