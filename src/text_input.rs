@@ -336,8 +336,8 @@ impl Render for TextInput {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
             .flex()
-            .line_height(px(30.))
-            .text_size(px(24.))
+            .h_full()
+            .w_full()
             .key_context("TextInput")
             .track_focus(&self.focus_handle(cx))
             .cursor(CursorStyle::IBeam)
@@ -368,10 +368,13 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .child(
                 div()
-                    .h(px(30. + 4. * 2.))
+                    .flex()
+                    .h_full()
                     .w_full()
                     .p(px(4.))
                     .bg(rgb(0x1e1e2e))
+                    .line_height(px(24.))
+                    .text_size(px(18.))
                     .text_color(rgb(0xcdd6f4))
                     .font_family("Iosevka")
                     .child(TextElement {
