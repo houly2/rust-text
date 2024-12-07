@@ -12,6 +12,8 @@ actions!(
         Backspace,
         Left,
         Right,
+        Up,
+        Down,
         SelectLeft,
         SelectRight,
         SelectAll,
@@ -79,7 +81,7 @@ impl TextInput {
     }
 
     fn new_line(&mut self, _: &NewLine, cx: &mut ViewContext<Self>) {
-        // handle selection
+        // todo: handle selection
         self.replace_text_in_range(None, "\n", cx);
     }
 
@@ -111,6 +113,42 @@ impl TextInput {
         } else {
             self.move_to(self.selected_range.end, cx)
         }
+    }
+
+    fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
+        let current = self.cursor_offset();
+        let line_idx = self.content.char_to_line(current);
+
+        if line_idx == 0 {
+            return;
+        }
+
+        let this_line = self.content.line_to_char(line_idx);
+        let prev_line = self.content.line_to_char(line_idx - 1);
+        let line_offset = std::cmp::min(
+            current - this_line,
+            self.content.line(line_idx - 1).len_chars() - 1,
+        );
+
+        self.move_to(prev_line + line_offset, cx)
+    }
+
+    fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
+        let current = self.cursor_offset();
+        let line_idx = self.content.char_to_line(current);
+
+        if line_idx == self.content.len_lines() - 1 {
+            return;
+        }
+
+        let this_line = self.content.line_to_char(line_idx);
+        let next_line = self.content.line_to_char(line_idx + 1);
+        let line_offset = std::cmp::min(
+            current - this_line,
+            self.content.line(line_idx + 1).len_chars(),
+        );
+
+        self.move_to(next_line + line_offset, cx)
     }
 
     fn home(&mut self, _: &Home, cx: &mut ViewContext<Self>) {
@@ -379,6 +417,8 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::delete))
             .on_action(cx.listener(Self::left))
             .on_action(cx.listener(Self::right))
+            .on_action(cx.listener(Self::up))
+            .on_action(cx.listener(Self::down))
             .on_action(cx.listener(Self::home))
             .on_action(cx.listener(Self::end))
             .on_action(cx.listener(Self::select_left))

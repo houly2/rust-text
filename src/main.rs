@@ -43,6 +43,8 @@ fn main() {
             KeyBinding::new("delete", Delete, None),
             KeyBinding::new("left", Left, None),
             KeyBinding::new("right", Right, None),
+            KeyBinding::new("up", Up, None),
+            KeyBinding::new("down", Down, None),
             KeyBinding::new("home", Home, None),
             KeyBinding::new("end", End, None),
             KeyBinding::new("shift-left", SelectLeft, None),
