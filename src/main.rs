@@ -38,6 +38,7 @@ impl Render for InputExample {
 fn main() {
     App::new().run(|cx: &mut AppContext| {
         cx.bind_keys([
+            KeyBinding::new("enter", NewLine, None),
             KeyBinding::new("backspace", Backspace, None),
             KeyBinding::new("delete", Delete, None),
             KeyBinding::new("left", Left, None),

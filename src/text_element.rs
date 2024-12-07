@@ -14,13 +14,16 @@ impl Lines {
 }
 
 impl Lines {
-    pub fn position_for_index(&self, index: usize) -> Option<Point<Pixels>> {
-        for line in &self.lines {
+    pub fn position_for_index_in_line(
+        &self,
+        index: usize,
+        line_number: usize,
+    ) -> Option<Point<Pixels>> {
+        if let Some(line) = self.lines.get(line_number) {
             if let Some(a) = line.position_for_index(index, self.line_height) {
-                return Some(a);
+                return Some(point(a.x, a.y + px(line_number as f32) * self.line_height));
             }
         }
-
         None
     }
 
@@ -142,7 +145,12 @@ impl Element for TextElement {
         let paint_cursor: Option<PaintQuad>;
 
         if input.blink_manager.read(cx).show() {
-            paint_cursor = if let Some(cursor_pos) = lines.position_for_index(cursor) {
+            let line_idx = display_text.char_to_line(cursor);
+            let char_idx = display_text.line_to_char(line_idx);
+
+            paint_cursor = if let Some(cursor_pos) =
+                lines.position_for_index_in_line(cursor - char_idx, line_idx)
+            {
                 Some(fill(
                     Bounds::new(
                         point(bounds.left() + cursor_pos.x, bounds.top() + cursor_pos.y),
@@ -160,9 +168,16 @@ impl Element for TextElement {
         if selected_range.is_empty() {
             selections = None;
         } else {
+            let start = display_text.char_to_byte(selected_range.start);
+            let start_line_idx = display_text.char_to_line(start);
+            let start_char_idx = display_text.line_to_char(start_line_idx);
             let start_point =
-                lines.position_for_index(display_text.char_to_byte(selected_range.start));
-            let end_point = lines.position_for_index(display_text.char_to_byte(selected_range.end));
+                lines.position_for_index_in_line(start - start_char_idx, start_line_idx);
+
+            let end = display_text.char_to_byte(selected_range.end);
+            let end_line_idx = display_text.char_to_line(end);
+            let end_char_idx = display_text.line_to_char(end_line_idx);
+            let end_point = lines.position_for_index_in_line(end - end_char_idx, end_line_idx);
 
             selections = match (start_point, end_point) {
                 (Some(start), Some(end)) => {

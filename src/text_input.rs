@@ -8,6 +8,7 @@ use unicode_segmentation::*;
 actions!(
     text_input,
     [
+        NewLine,
         Backspace,
         Left,
         Right,
@@ -75,6 +76,11 @@ impl TextInput {
                 }),
             ],
         }
+    }
+
+    fn new_line(&mut self, _: &NewLine, cx: &mut ViewContext<Self>) {
+        // handle selection
+        self.replace_text_in_range(None, "\n", cx);
     }
 
     fn backspace(&mut self, _: &Backspace, cx: &mut ViewContext<Self>) {
@@ -368,6 +374,7 @@ impl Render for TextInput {
             .key_context("TextInput")
             .track_focus(&self.focus_handle(cx))
             .cursor(CursorStyle::IBeam)
+            .on_action(cx.listener(Self::new_line))
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
             .on_action(cx.listener(Self::left))
