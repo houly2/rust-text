@@ -2,6 +2,40 @@ use crate::text_input::TextInput;
 use gpui::*;
 use smallvec::SmallVec;
 
+pub struct Lines {
+    lines: SmallVec<[WrappedLine; 1]>,
+    line_height: Pixels,
+}
+
+impl Lines {
+    pub fn new(lines: SmallVec<[WrappedLine; 1]>, line_height: Pixels) -> Self {
+        Self { lines, line_height }
+    }
+}
+
+impl Lines {
+    pub fn position_for_index(&self, index: usize) -> Option<Point<Pixels>> {
+        for line in &self.lines {
+            if let Some(a) = line.position_for_index(index, self.line_height) {
+                return Some(a);
+            }
+        }
+
+        None
+    }
+
+    pub fn index_for_position(&self, position: Point<Pixels>) -> Option<usize> {
+        for line in &self.lines {
+            match line.index_for_position(position, self.line_height) {
+                Ok(v) => return Some(v),
+                _ => continue,
+            }
+        }
+
+        None
+    }
+}
+
 pub struct TextElement {
     input: View<TextInput>,
 }
@@ -10,28 +44,12 @@ impl TextElement {
     pub fn new(input: View<TextInput>) -> Self {
         Self { input }
     }
-
-    fn find_position(
-        &self,
-        lines: &SmallVec<[WrappedLine; 1]>,
-        position: usize,
-        line_height: Pixels,
-    ) -> Option<Point<Pixels>> {
-        for line in lines {
-            let a = line.position_for_index(position, line_height);
-            if let Some(b) = a {
-                return Some(b);
-            }
-        }
-
-        None
-    }
 }
 
 pub struct PrepaintState {
-    lines: Option<SmallVec<[WrappedLine; 1]>>,
+    lines: Option<Lines>,
     cursor: Option<PaintQuad>,
-    selection: Option<PaintQuad>,
+    selections: Option<Vec<PaintQuad>>,
 }
 
 impl IntoElement for TextElement {
@@ -113,18 +131,18 @@ impl Element for TextElement {
         let display_text = input.content.clone();
         let text: SharedString = display_text.to_string().into();
 
-        let line_height = cx.line_height();
-        let lines = cx
+        let lines_raw = cx
             .text_system()
             .shape_text(text.clone(), font_size, &runs, None)
             .unwrap();
 
-        let selection: Option<PaintQuad>;
+        let lines = Lines::new(lines_raw, cx.line_height());
+
+        let selections: Option<Vec<PaintQuad>>;
         let paint_cursor: Option<PaintQuad>;
 
         if input.blink_manager.read(cx).show() {
-            paint_cursor = if let Some(cursor_pos) = self.find_position(&lines, cursor, line_height)
-            {
+            paint_cursor = if let Some(cursor_pos) = lines.position_for_index(cursor) {
                 Some(fill(
                     Bounds::new(
                         point(bounds.left() + cursor_pos.x, bounds.top() + cursor_pos.y),
@@ -140,22 +158,80 @@ impl Element for TextElement {
         }
 
         if selected_range.is_empty() {
-            selection = None;
+            selections = None;
         } else {
-            let start = display_text.char_to_byte(selected_range.start);
-            let end = display_text.char_to_byte(selected_range.end);
+            let start_point =
+                lines.position_for_index(display_text.char_to_byte(selected_range.start));
+            let end_point = lines.position_for_index(display_text.char_to_byte(selected_range.end));
 
-            let start_point = self.find_position(&lines, start, line_height);
-            let end_point = self.find_position(&lines, end, line_height);
+            selections = match (start_point, end_point) {
+                (Some(start), Some(end)) => {
+                    let selection_color = rgba(0x7f849c64);
+                    let line_count: u32 = ((end.y - start.y) / lines.line_height).round() as u32;
 
-            selection = match (start_point, end_point) {
-                (Some(start), Some(end)) => Some(fill(
-                    Bounds::from_corners(
-                        point(bounds.left() + start.x, bounds.top() + start.y),
-                        point(bounds.left() + end.x, bounds.bottom() + end.y),
-                    ),
-                    rgba(0x7f849c64),
-                )),
+                    if line_count == 0 {
+                        Some(vec![fill(
+                            Bounds::from_corners(
+                                point(bounds.left() + start.x, bounds.top() + start.y),
+                                point(bounds.left() + end.x, bounds.bottom() + end.y),
+                            ),
+                            selection_color,
+                        )])
+                    } else if line_count == 1 {
+                        let mut selections = Vec::new();
+                        selections.push(fill(
+                            Bounds::from_corners(
+                                point(bounds.left() + start.x, bounds.top() + start.y),
+                                point(bounds.right(), bounds.bottom() + start.y),
+                            ),
+                            selection_color,
+                        ));
+                        selections.push(fill(
+                            Bounds::from_corners(
+                                point(bounds.left(), bounds.top() + end.y),
+                                point(bounds.left() + end.x, bounds.bottom() + end.y),
+                            ),
+                            selection_color,
+                        ));
+                        Some(selections)
+                    } else {
+                        let mut selections = Vec::new();
+                        selections.push(fill(
+                            Bounds::from_corners(
+                                point(bounds.left() + start.x, bounds.top() + start.y),
+                                point(bounds.right(), bounds.bottom() + start.y),
+                            ),
+                            selection_color,
+                        ));
+
+                        for n in 1..line_count {
+                            selections.push(fill(
+                                Bounds::from_corners(
+                                    point(
+                                        bounds.left(),
+                                        bounds.top() + start.y + px(n as f32) * lines.line_height,
+                                    ),
+                                    point(
+                                        bounds.right(),
+                                        bounds.bottom()
+                                            + start.y
+                                            + px(n as f32) * lines.line_height,
+                                    ),
+                                ),
+                                selection_color,
+                            ));
+                        }
+
+                        selections.push(fill(
+                            Bounds::from_corners(
+                                point(bounds.left(), bounds.top() + end.y),
+                                point(bounds.left() + end.x, bounds.bottom() + end.y),
+                            ),
+                            selection_color,
+                        ));
+                        Some(selections)
+                    }
+                }
                 _ => None,
             }
         }
@@ -163,7 +239,7 @@ impl Element for TextElement {
         PrepaintState {
             lines: Some(lines),
             cursor: paint_cursor,
-            selection,
+            selections,
         }
     }
 
@@ -180,14 +256,17 @@ impl Element for TextElement {
             &focus_handle,
             ElementInputHandler::new(bounds, self.input.clone()),
         );
-        if let Some(selection) = prepaint.selection.take() {
-            cx.paint_quad(selection);
+
+        if let Some(selections) = prepaint.selections.take() {
+            for selection in selections {
+                cx.paint_quad(selection);
+            }
         }
 
         let line_height = cx.line_height();
         let mut offset_y = px(0.);
         let lines = prepaint.lines.take().unwrap();
-        for line in lines {
+        for line in &lines.lines {
             line.paint(
                 point(bounds.origin.x, bounds.origin.y + offset_y),
                 line_height,
@@ -202,7 +281,7 @@ impl Element for TextElement {
         }
 
         self.input.update(cx, |input, _cx| {
-            // input.last_layout = Some(lines);
+            input.last_layout = Some(lines);
             input.last_bounds = Some(bounds);
         });
     }

@@ -1,4 +1,4 @@
-use crate::{blink_manager::BlinkManager, text_element::TextElement};
+use crate::{blink_manager::BlinkManager, text_element::Lines, text_element::TextElement};
 
 use gpui::*;
 use ropey::*;
@@ -35,11 +35,10 @@ actions!(
 pub struct TextInput {
     pub focus_handle: FocusHandle,
     pub content: Rope,
-    // pub content: SharedString,
     pub selected_range: Range<usize>,
     selection_reversed: bool,
     pub marked_range: Option<Range<usize>>,
-    pub last_layout: Option<ShapedLine>,
+    pub last_layout: Option<Lines>,
     pub last_bounds: Option<Bounds<Pixels>>,
     is_selecting: bool,
 
@@ -173,7 +172,7 @@ impl TextInput {
             return 0;
         }
 
-        let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
+        let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         else {
             return 0;
         };
@@ -185,8 +184,13 @@ impl TextInput {
             return self.content.len_chars();
         }
 
-        self.content
-            .byte_to_char(line.closest_index_for_x(position.x - bounds.left()))
+        if let Some(idx) =
+            lines.index_for_position(point(position.x - bounds.left(), position.y - bounds.top()))
+        {
+            return self.content.byte_to_char(idx);
+        }
+
+        return 0;
     }
 
     fn show_character_palette(&mut self, _: &ShowCharacterPalette, cx: &mut ViewContext<Self>) {
@@ -493,23 +497,25 @@ impl ViewInputHandler for TextInput {
 
     fn bounds_for_range(
         &mut self,
-        range_utf16: std::ops::Range<usize>,
-        bounds: Bounds<Pixels>,
+        _: std::ops::Range<usize>,
+        _: Bounds<Pixels>,
         _: &mut ViewContext<Self>,
     ) -> Option<Bounds<Pixels>> {
         println!("bounds_for_range");
-        let last_layout = self.last_layout.as_ref()?;
-        let range = self.range_from_utf16(&range_utf16);
 
-        Some(Bounds::from_corners(
-            point(
-                bounds.left() + last_layout.x_for_index(range.start),
-                bounds.top(),
-            ),
-            point(
-                bounds.left() + last_layout.x_for_index(range.end),
-                bounds.bottom(),
-            ),
-        ))
+        None
+        // let last_layout = self.last_layout.as_ref()?;
+        // let range = self.range_from_utf16(&range_utf16);
+
+        // Some(Bounds::from_corners(
+        //     point(
+        //         bounds.left() + last_layout.x_for_index(range.start),
+        //         bounds.top(),
+        //     ),
+        //     point(
+        //         bounds.left() + last_layout.x_for_index(range.end),
+        //         bounds.bottom(),
+        //     ),
+        // ))
     }
 }
