@@ -3970,6 +3970,7 @@ version = "0.1.0"
 dependencies = [
  "gpui",
  "ropey",
+ "smallvec",
  "unicode-segmentation",
 ]
 
