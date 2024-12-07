@@ -279,11 +279,17 @@ impl TextInput {
     }
 
     fn move_to_line_start(&mut self, _: &MoveToLineStart, cx: &mut ViewContext<Self>) {
-        self.move_to(0, cx)
+        let current_line_idx = self.content.char_to_line(self.cursor_offset());
+        let start_of_line_idx = self.content.line_to_char(current_line_idx);
+        self.move_to(start_of_line_idx, cx)
     }
 
     fn move_to_line_end(&mut self, _: &MoveToLineEnd, cx: &mut ViewContext<Self>) {
-        self.move_to(self.content.len_chars(), cx)
+        let current_line_idx = self.content.char_to_line(self.cursor_offset());
+        let start_of_line_idx = self.content.line_to_char(current_line_idx);
+        let current_line = self.content.line(current_line_idx);
+        // todo: handle -1 for last line since its not needed there because there is no \n on the last line
+        self.move_to(start_of_line_idx + current_line.len_chars() - 1, cx)
     }
 
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
@@ -525,8 +531,6 @@ impl ViewInputHandler for TextInput {
         cx: &mut ViewContext<Self>,
     ) {
         let range = range_utf16
-            .as_ref()
-            .map(|range_utf16| self.range_from_utf16(range_utf16))
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
 

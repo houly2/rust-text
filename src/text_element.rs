@@ -146,10 +146,11 @@ impl Element for TextElement {
 
         if input.blink_manager.read(cx).show() {
             let line_idx = display_text.char_to_line(cursor);
-            let char_idx = display_text.line_to_char(line_idx);
+            let char_idx = display_text.line_to_byte(line_idx);
+            let cursor_idx = display_text.char_to_byte(cursor);
 
             paint_cursor = if let Some(cursor_pos) =
-                lines.position_for_index_in_line(cursor - char_idx, line_idx)
+                lines.position_for_index_in_line(cursor_idx - char_idx, line_idx)
             {
                 Some(fill(
                     Bounds::new(
@@ -169,13 +170,13 @@ impl Element for TextElement {
             selections = None;
         } else {
             let start = display_text.char_to_byte(selected_range.start);
-            let start_line_idx = display_text.char_to_line(start);
+            let start_line_idx = display_text.byte_to_line(start);
             let start_char_idx = display_text.line_to_char(start_line_idx);
             let start_point =
                 lines.position_for_index_in_line(start - start_char_idx, start_line_idx);
 
             let end = display_text.char_to_byte(selected_range.end);
-            let end_line_idx = display_text.char_to_line(end);
+            let end_line_idx = display_text.byte_to_line(end);
             let end_char_idx = display_text.line_to_char(end_line_idx);
             let end_point = lines.position_for_index_in_line(end - end_char_idx, end_line_idx);
 
