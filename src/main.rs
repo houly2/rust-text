@@ -39,6 +39,7 @@ fn main() {
     App::new().run(|cx: &mut AppContext| {
         cx.bind_keys([
             KeyBinding::new("enter", NewLine, None),
+            KeyBinding::new("cmd-enter", NewLineWithoutSplit, None),
             KeyBinding::new("backspace", Backspace, None),
             KeyBinding::new("delete", Delete, None),
             KeyBinding::new("left", Left, None),
@@ -49,6 +50,8 @@ fn main() {
             KeyBinding::new("end", End, None),
             KeyBinding::new("shift-left", SelectLeft, None),
             KeyBinding::new("shift-right", SelectRight, None),
+            KeyBinding::new("shift-up", SelectUp, None),
+            KeyBinding::new("shift-down", SelectDown, None),
             KeyBinding::new("cmd-a", SelectAll, None),
             KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, None),
             KeyBinding::new("cmd-c", Copy, None),
@@ -75,7 +78,11 @@ fn main() {
                     ..Default::default()
                 },
                 |cx| {
-                    let text_input = cx.new_view(|cx| TextInput::new(cx));
+                    let text_input = cx.new_view(|cx| {
+                        let mut element = TextInput::new(cx);
+                        element.insert("This is just ä Test! Ω≈ Haha.\nOtherwise i need to input this text all the time myself.\nAnd some more.".into(), cx);
+                        return element;
+                    });
                     cx.new_view(|cx| InputExample {
                         text_input,
                         focus_handle: cx.focus_handle(),

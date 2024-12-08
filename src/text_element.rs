@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 
 pub struct Lines {
     lines: SmallVec<[WrappedLine; 1]>,
-    line_height: Pixels,
+    pub line_height: Pixels,
 }
 
 impl Lines {
@@ -19,20 +19,41 @@ impl Lines {
         index: usize,
         line_number: usize,
     ) -> Option<Point<Pixels>> {
+        let mut previous_heights = px(0.);
+        if line_number > 0 {
+            for n in 0..line_number {
+                if let Some(line) = self.lines.get(n) {
+                    previous_heights += line.size(self.line_height).height;
+                }
+            }
+        }
+
         if let Some(line) = self.lines.get(line_number) {
             if let Some(a) = line.position_for_index(index, self.line_height) {
-                return Some(point(a.x, a.y + px(line_number as f32) * self.line_height));
+                return Some(point(a.x, a.y + previous_heights));
             }
         }
         None
     }
 
-    pub fn index_for_position(&self, position: Point<Pixels>) -> Option<usize> {
+    pub fn index_for_position(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
+        let mut previous_heights = px(0.);
+        let mut line_idx = 0;
         for line in &self.lines {
-            match line.index_for_position(position, self.line_height) {
-                Ok(v) => return Some(v),
-                _ => continue,
+            let size = line.size(self.line_height);
+            let temp_pos = point(position.x, position.y - previous_heights);
+
+            if temp_pos.y < px(0.) {
+                return None;
             }
+
+            match line.index_for_position(temp_pos, self.line_height) {
+                Ok(v) => return Some((line_idx, v)),
+                _ => {}
+            }
+
+            line_idx += 1;
+            previous_heights += size.height;
         }
 
         None
@@ -77,7 +98,7 @@ impl Element for TextElement {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
         style.size.width = relative(1.).into();
-        style.size.height = cx.line_height().into();
+        style.size.height = relative(1.).into();
         (cx.request_layout(style, []), ())
     }
 
@@ -139,7 +160,8 @@ impl Element for TextElement {
             .shape_text(text.clone(), font_size, &runs, None)
             .unwrap();
 
-        let lines = Lines::new(lines_raw, cx.line_height());
+        let line_height = cx.line_height();
+        let lines = Lines::new(lines_raw, line_height);
 
         let selections: Option<Vec<PaintQuad>>;
         let paint_cursor: Option<PaintQuad>;
@@ -155,7 +177,7 @@ impl Element for TextElement {
                 Some(fill(
                     Bounds::new(
                         point(bounds.left() + cursor_pos.x, bounds.top() + cursor_pos.y),
-                        size(px(2.), bounds.bottom() - bounds.top()),
+                        size(px(2.), line_height),
                     ),
                     rgb(0xcdd6f4),
                 ))
@@ -171,13 +193,13 @@ impl Element for TextElement {
         } else {
             let start = display_text.char_to_byte(selected_range.start);
             let start_line_idx = display_text.byte_to_line(start);
-            let start_char_idx = display_text.line_to_char(start_line_idx);
+            let start_char_idx = display_text.line_to_byte(start_line_idx);
             let start_point =
                 lines.position_for_index_in_line(start - start_char_idx, start_line_idx);
 
             let end = display_text.char_to_byte(selected_range.end);
             let end_line_idx = display_text.byte_to_line(end);
-            let end_char_idx = display_text.line_to_char(end_line_idx);
+            let end_char_idx = display_text.line_to_byte(end_line_idx);
             let end_point = lines.position_for_index_in_line(end - end_char_idx, end_line_idx);
 
             selections = match (start_point, end_point) {
@@ -189,7 +211,7 @@ impl Element for TextElement {
                         Some(vec![fill(
                             Bounds::from_corners(
                                 point(bounds.left() + start.x, bounds.top() + start.y),
-                                point(bounds.left() + end.x, bounds.bottom() + end.y),
+                                point(bounds.left() + end.x, bounds.top() + end.y + line_height),
                             ),
                             selection_color,
                         )])
@@ -198,14 +220,14 @@ impl Element for TextElement {
                         selections.push(fill(
                             Bounds::from_corners(
                                 point(bounds.left() + start.x, bounds.top() + start.y),
-                                point(bounds.right(), bounds.bottom() + start.y),
+                                point(bounds.right(), bounds.top() + start.y + line_height),
                             ),
                             selection_color,
                         ));
                         selections.push(fill(
                             Bounds::from_corners(
                                 point(bounds.left(), bounds.top() + end.y),
-                                point(bounds.left() + end.x, bounds.bottom() + end.y),
+                                point(bounds.left() + end.x, bounds.top() + end.y + line_height),
                             ),
                             selection_color,
                         ));
@@ -215,7 +237,7 @@ impl Element for TextElement {
                         selections.push(fill(
                             Bounds::from_corners(
                                 point(bounds.left() + start.x, bounds.top() + start.y),
-                                point(bounds.right(), bounds.bottom() + start.y),
+                                point(bounds.right(), bounds.top() + start.y + line_height),
                             ),
                             selection_color,
                         ));
@@ -229,9 +251,10 @@ impl Element for TextElement {
                                     ),
                                     point(
                                         bounds.right(),
-                                        bounds.bottom()
+                                        bounds.top()
                                             + start.y
-                                            + px(n as f32) * lines.line_height,
+                                            + px(n as f32) * lines.line_height
+                                            + lines.line_height,
                                     ),
                                 ),
                                 selection_color,
@@ -241,7 +264,7 @@ impl Element for TextElement {
                         selections.push(fill(
                             Bounds::from_corners(
                                 point(bounds.left(), bounds.top() + end.y),
-                                point(bounds.left() + end.x, bounds.bottom() + end.y),
+                                point(bounds.left() + end.x, bounds.top() + end.y + line_height),
                             ),
                             selection_color,
                         ));
@@ -283,13 +306,14 @@ impl Element for TextElement {
         let mut offset_y = px(0.);
         let lines = prepaint.lines.take().unwrap();
         for line in &lines.lines {
+            let size = line.size(line_height);
             line.paint(
                 point(bounds.origin.x, bounds.origin.y + offset_y),
                 line_height,
                 cx,
             )
             .unwrap();
-            offset_y += line_height;
+            offset_y += size.height;
         }
 
         if let Some(cursor) = prepaint.cursor.take() {

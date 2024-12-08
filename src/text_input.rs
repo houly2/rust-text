@@ -9,6 +9,7 @@ actions!(
     text_input,
     [
         NewLine,
+        NewLineWithoutSplit,
         Backspace,
         Left,
         Right,
@@ -16,6 +17,8 @@ actions!(
         Down,
         SelectLeft,
         SelectRight,
+        SelectUp,
+        SelectDown,
         SelectAll,
         Delete,
         Home,
@@ -80,8 +83,18 @@ impl TextInput {
         }
     }
 
+    pub fn insert(&mut self, text: String, cx: &mut ViewContext<Self>) {
+        self.replace_text_in_range(None, &text, cx);
+    }
+
     fn new_line(&mut self, _: &NewLine, cx: &mut ViewContext<Self>) {
         // todo: handle selection
+        self.replace_text_in_range(None, "\n", cx);
+    }
+
+    fn new_line_without_split(&mut self, _: &NewLineWithoutSplit, cx: &mut ViewContext<Self>) {
+        // todo: handle selection
+        self.move_to(self.position_for_end_of_line(self.cursor_offset()), cx);
         self.replace_text_in_range(None, "\n", cx);
     }
 
@@ -116,39 +129,79 @@ impl TextInput {
     }
 
     fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
-        let current = self.cursor_offset();
-        let line_idx = self.content.char_to_line(current);
+        if let Some(pos) = self.position_for_up() {
+            self.move_to(pos, cx)
+        }
+    }
 
-        if line_idx == 0 {
-            return;
+    fn position_from_layout(&mut self, position: usize) -> Option<Point<Pixels>> {
+        if let Some(layout) = &self.last_layout {
+            let line_idx = self.content.char_to_line(position);
+            let char_idx = self.content.line_to_byte(line_idx);
+            let cursor_idx = self.content.char_to_byte(position);
+
+            return layout.position_for_index_in_line(cursor_idx - char_idx, line_idx);
+        }
+        None
+    }
+
+    fn position_for_up(&mut self) -> Option<usize> {
+        if let Some(cursor_pos) = self.position_from_layout(self.cursor_offset()) {
+            if let Some(layout) = &self.last_layout {
+                let y = cursor_pos.y - layout.line_height;
+
+                if y < px(0.) {
+                    return None;
+                }
+
+                let prev_visual_line_pos = point(cursor_pos.x, y);
+                if let Some((line_idx, pos)) = layout.index_for_position(prev_visual_line_pos) {
+                    let line = self.content.line_to_char(line_idx);
+                    return Some(line + pos);
+                } else {
+                    let line_idx = self.content.char_to_line(self.cursor_offset());
+                    let line_start = self.content.line_to_char(line_idx);
+                    return Some(self.previous_boundary(line_start));
+                }
+            }
         }
 
-        let this_line = self.content.line_to_char(line_idx);
-        let prev_line = self.content.line_to_char(line_idx - 1);
-        let line_offset = std::cmp::min(
-            current - this_line,
-            self.content.line(line_idx - 1).len_chars() - 1,
-        );
-
-        self.move_to(prev_line + line_offset, cx)
+        None
     }
 
     fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
-        let current = self.cursor_offset();
-        let line_idx = self.content.char_to_line(current);
+        if let Some(pos) = self.position_for_down() {
+            self.move_to(pos, cx)
+        }
+    }
 
-        if line_idx == self.content.len_lines() - 1 {
-            return;
+    fn position_for_down(&mut self) -> Option<usize> {
+        if let Some(cursor_pos) = self.position_from_layout(self.cursor_offset()) {
+            if let Some(layout) = &self.last_layout {
+                let next_visual_line_pos = point(cursor_pos.x, cursor_pos.y + layout.line_height);
+                if let Some((line_idx, pos)) = layout.index_for_position(next_visual_line_pos) {
+                    let line = self.content.line_to_char(line_idx);
+                    return Some(line + pos);
+                } else {
+                    // did this line wrap?
+                    let end_of_line = self.position_for_end_of_line(self.cursor_offset());
+                    if let Some(end_pos) = self.position_from_layout(end_of_line) {
+                        if cursor_pos.y < end_pos.y {
+                            return Some(end_of_line);
+                        }
+                    }
+
+                    // go to end of next line?
+                    let current_line = self.content.char_to_line(self.cursor_offset());
+                    if current_line < self.content.len_lines() {
+                        let start_of_next_line = self.content.line_to_byte(current_line + 1);
+                        return Some(self.position_for_end_of_line(start_of_next_line));
+                    }
+                }
+            }
         }
 
-        let this_line = self.content.line_to_char(line_idx);
-        let next_line = self.content.line_to_char(line_idx + 1);
-        let line_offset = std::cmp::min(
-            current - this_line,
-            self.content.line(line_idx + 1).len_chars(),
-        );
-
-        self.move_to(next_line + line_offset, cx)
+        None
     }
 
     fn home(&mut self, _: &Home, cx: &mut ViewContext<Self>) {
@@ -169,7 +222,7 @@ impl TextInput {
 
     fn paste(&mut self, _: &Paste, cx: &mut ViewContext<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            self.replace_text_in_range(None, &text.replace("\n", " "), cx);
+            self.replace_text_in_range(None, &text, cx);
         }
     }
 
@@ -228,10 +281,10 @@ impl TextInput {
             return self.content.len_chars();
         }
 
-        if let Some(idx) =
-            lines.index_for_position(point(position.x - bounds.left(), position.y - bounds.top()))
-        {
-            return self.content.byte_to_char(idx);
+        let pos = point(position.x - bounds.left(), position.y - bounds.top());
+        if let Some((line_idx, byte_idx)) = lines.index_for_position(pos) {
+            let line = self.content.line_to_byte(line_idx);
+            return self.content.byte_to_char(line + byte_idx);
         }
 
         return 0;
@@ -249,6 +302,18 @@ impl TextInput {
         self.select_to(self.next_boundary(self.cursor_offset()), cx);
     }
 
+    fn select_up(&mut self, _: &SelectUp, cx: &mut ViewContext<Self>) {
+        if let Some(pos) = self.position_for_up() {
+            self.select_to(pos, cx);
+        }
+    }
+
+    fn select_down(&mut self, _: &SelectDown, cx: &mut ViewContext<Self>) {
+        if let Some(pos) = self.position_for_down() {
+            self.select_to(pos, cx);
+        }
+    }
+
     fn select_all(&mut self, _: &SelectAll, cx: &mut ViewContext<Self>) {
         self.move_to(0, cx);
         self.select_to(self.content.len_chars(), cx);
@@ -263,11 +328,32 @@ impl TextInput {
     }
 
     fn select_line_start(&mut self, _: &SelectLineStart, cx: &mut ViewContext<Self>) {
-        self.select_to(0, cx);
+        let start_of_line_idx = self.position_for_start_of_line();
+        self.select_to(start_of_line_idx, cx)
+    }
+
+    fn position_for_start_of_line(&self) -> usize {
+        let current_line_idx = self.content.char_to_line(self.cursor_offset());
+        self.content.line_to_char(current_line_idx)
+    }
+
+    fn position_for_end_of_line(&self, position: usize) -> usize {
+        let current_line_idx = self.content.char_to_line(position);
+        let start_of_line_idx = self.content.line_to_char(current_line_idx);
+        let current_line = self.content.line(current_line_idx);
+        let last_line_idx = self.content.len_lines() - 1;
+
+        let offset = if current_line_idx == last_line_idx {
+            0
+        } else {
+            1
+        };
+
+        start_of_line_idx + current_line.len_chars() - offset
     }
 
     fn select_line_end(&mut self, _: &SelectLineEnd, cx: &mut ViewContext<Self>) {
-        self.select_to(self.content.len_chars(), cx);
+        self.select_to(self.position_for_end_of_line(self.cursor_offset()), cx);
     }
 
     fn move_to_word_start(&mut self, _: &MoveToWordStart, cx: &mut ViewContext<Self>) {
@@ -279,17 +365,12 @@ impl TextInput {
     }
 
     fn move_to_line_start(&mut self, _: &MoveToLineStart, cx: &mut ViewContext<Self>) {
-        let current_line_idx = self.content.char_to_line(self.cursor_offset());
-        let start_of_line_idx = self.content.line_to_char(current_line_idx);
+        let start_of_line_idx = self.position_for_start_of_line();
         self.move_to(start_of_line_idx, cx)
     }
 
-    fn move_to_line_end(&mut self, _: &MoveToLineEnd, cx: &mut ViewContext<Self>) {
-        let current_line_idx = self.content.char_to_line(self.cursor_offset());
-        let start_of_line_idx = self.content.line_to_char(current_line_idx);
-        let current_line = self.content.line(current_line_idx);
-        // todo: handle -1 for last line since its not needed there because there is no \n on the last line
-        self.move_to(start_of_line_idx + current_line.len_chars() - 1, cx)
+    fn move_to_line_end_handler(&mut self, _: &MoveToLineEnd, cx: &mut ViewContext<Self>) {
+        self.move_to(self.position_for_end_of_line(self.cursor_offset()), cx)
     }
 
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
@@ -419,6 +500,7 @@ impl Render for TextInput {
             .track_focus(&self.focus_handle(cx))
             .cursor(CursorStyle::IBeam)
             .on_action(cx.listener(Self::new_line))
+            .on_action(cx.listener(Self::new_line_without_split))
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
             .on_action(cx.listener(Self::left))
@@ -429,6 +511,8 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::end))
             .on_action(cx.listener(Self::select_left))
             .on_action(cx.listener(Self::select_right))
+            .on_action(cx.listener(Self::select_up))
+            .on_action(cx.listener(Self::select_down))
             .on_action(cx.listener(Self::select_all))
             .on_action(cx.listener(Self::show_character_palette))
             .on_action(cx.listener(Self::copy))
@@ -437,7 +521,7 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::move_to_word_start))
             .on_action(cx.listener(Self::move_to_word_end))
             .on_action(cx.listener(Self::move_to_line_start))
-            .on_action(cx.listener(Self::move_to_line_end))
+            .on_action(cx.listener(Self::move_to_line_end_handler))
             .on_action(cx.listener(Self::select_word_start))
             .on_action(cx.listener(Self::select_word_end))
             .on_action(cx.listener(Self::select_line_start))
