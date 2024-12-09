@@ -28,12 +28,12 @@ impl Lines {
             }
         }
 
-        if let Some(line) = self.lines.get(line_number) {
-            if let Some(a) = line.position_for_index(index, self.line_height) {
-                return Some(point(a.x, a.y + previous_heights));
-            }
-        }
-        None
+        let line = self.lines.get(line_number)?;
+        let position_in_line = line.position_for_index(index, self.line_height)?;
+        Some(point(
+            position_in_line.x,
+            position_in_line.y + previous_heights,
+        ))
     }
 
     pub fn index_for_position(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
