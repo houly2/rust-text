@@ -156,8 +156,9 @@ impl TextInput {
 
                 let prev_visual_line_pos = point(cursor_pos.x, y);
                 if let Some((line_idx, pos)) = layout.index_for_position(prev_visual_line_pos) {
-                    let line = self.content.line_to_char(line_idx);
-                    return Some(line + pos);
+                    let line = self.content.line_to_byte(line_idx);
+                    let char = self.content.byte_to_char(line + pos);
+                    return Some(char);
                 } else {
                     let line_idx = self.content.char_to_line(self.cursor_offset());
                     let line_start = self.content.line_to_char(line_idx);
@@ -194,7 +195,7 @@ impl TextInput {
                     // go to end of next line?
                     let current_line = self.content.char_to_line(self.cursor_offset());
                     if current_line < self.content.len_lines() {
-                        let start_of_next_line = self.content.line_to_byte(current_line + 1);
+                        let start_of_next_line = self.content.line_to_char(current_line + 1);
                         return Some(self.position_for_end_of_line(start_of_next_line));
                     }
                 }
@@ -402,42 +403,6 @@ impl TextInput {
         cx.notify();
     }
 
-    fn offset_to_utf16(&self, offset: usize) -> usize {
-        let mut utf16_offset = 0;
-        let mut utf8_count = 0;
-
-        for ch in self.content.chars() {
-            if utf8_count >= offset {
-                break;
-            }
-            utf8_count += ch.len_utf8();
-            utf16_offset += ch.len_utf16();
-        }
-        utf16_offset
-    }
-
-    fn offset_from_utf16(&self, offset: usize) -> usize {
-        let mut utf8_offset = 0;
-        let mut utf16_count = 0;
-
-        for ch in self.content.chars() {
-            if utf16_count >= offset {
-                break;
-            }
-            utf16_count += ch.len_utf16();
-            utf8_offset += ch.len_utf8();
-        }
-        utf8_offset
-    }
-
-    fn range_to_utf16(&self, range: &Range<usize>) -> Range<usize> {
-        self.offset_to_utf16(range.start)..self.offset_to_utf16(range.end)
-    }
-
-    fn range_from_utf16(&self, range_utf16: &Range<usize>) -> Range<usize> {
-        self.offset_from_utf16(range_utf16.start)..self.offset_from_utf16(range_utf16.end)
-    }
-
     fn start_of_word(&self, offset: usize) -> usize {
         let c = self.content.char_to_byte(self.previous_boundary(offset));
         let t = self
@@ -559,9 +524,7 @@ impl ViewInputHandler for TextInput {
         actual_range: &mut Option<std::ops::Range<usize>>,
         _: &mut ViewContext<Self>,
     ) -> Option<String> {
-        let range = self.range_from_utf16(&range_utf16);
-        actual_range.replace(self.range_to_utf16(&range));
-        Some(self.content.slice(range).to_string())
+        Some(self.content.slice(range_utf16).to_string())
     }
 
     fn selected_text_range(
@@ -570,15 +533,13 @@ impl ViewInputHandler for TextInput {
         _: &mut ViewContext<Self>,
     ) -> Option<UTF16Selection> {
         Some(UTF16Selection {
-            range: self.range_to_utf16(&self.selected_range),
+            range: self.selected_range.clone(),
             reversed: self.selection_reversed,
         })
     }
 
     fn marked_text_range(&self, _: &mut ViewContext<Self>) -> Option<std::ops::Range<usize>> {
-        self.marked_range
-            .as_ref()
-            .map(|range| self.range_to_utf16(range))
+        self.marked_range.clone()
     }
 
     fn unmark_text(&mut self, _: &mut ViewContext<Self>) {
@@ -614,19 +575,21 @@ impl ViewInputHandler for TextInput {
         new_selected_range_utf16: Option<std::ops::Range<usize>>,
         cx: &mut ViewContext<Self>,
     ) {
-        let range = range_utf16
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
+        if let Some(marked_range) = self.marked_range.take() {
+            self.replace_text_in_range(Some(marked_range), "", cx);
+        } else {
+            let range = range_utf16.unwrap_or(self.selected_range.clone());
+            self.content.remove(range.start..range.end);
+            self.content.insert(range.start, new_text);
 
-        self.content.remove(range.start..range.end);
-        self.content.insert(range.start, new_text);
+            let l = new_text.chars().count();
+            self.marked_range = Some(range.start..range.start + l);
+            self.selected_range = new_selected_range_utf16
+                .as_ref()
+                .map(|new_range| new_range.start + range.start..new_range.end + range.end)
+                .unwrap_or_else(|| range.start + l..range.start + l);
+        }
 
-        let l = new_text.chars().count();
-        self.marked_range = Some(range.start..range.start + l);
-        self.selected_range = new_selected_range_utf16
-            .as_ref()
-            .map(|new_range| new_range.start + range.start..new_range.end + range.end)
-            .unwrap_or_else(|| range.start + l..range.start + l);
         cx.notify();
     }
 
