@@ -1,4 +1,4 @@
-use crate::{blink_manager::BlinkManager, text_element::Lines, text_element::TextElement};
+use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
 use gpui::*;
 use ropey::*;
