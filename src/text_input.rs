@@ -520,7 +520,6 @@ impl Render for TextInput {
                     .flex()
                     .h_full()
                     .w_full()
-                    .p_2()
                     .bg(rgb(0x1e1e2e))
                     .line_height(px(28.))
                     .text_size(px(18.))
