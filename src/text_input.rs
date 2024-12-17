@@ -218,9 +218,16 @@ impl TextInput {
         }
 
         let pos = point(position.x - bounds.left(), position.y - bounds.top());
+
         if let Some((line_idx, byte_idx)) = lines.index_for_position(pos) {
             let line = self.content.line_to_byte(line_idx);
             return self.content.byte_to_char(line + byte_idx);
+        }
+
+        if let Some(line_idx) = lines.line_idx_for_y(pos.y) {
+            let line = self.content.line_to_byte(line_idx);
+            let end_of_line = self.position_for_end_of_line(line);
+            return self.content.byte_to_char(end_of_line);
         }
 
         return 0;
@@ -513,7 +520,7 @@ impl Render for TextInput {
                     .flex()
                     .h_full()
                     .w_full()
-                    .p(px(4.))
+                    .p_2()
                     .bg(rgb(0x1e1e2e))
                     .line_height(px(28.))
                     .text_size(px(18.))

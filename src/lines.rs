@@ -55,4 +55,21 @@ impl Lines {
 
         None
     }
+
+    pub fn line_idx_for_y(&self, y: Pixels) -> Option<usize> {
+        let mut previous_heights = px(0.);
+        let mut line_idx = 0;
+        for line in &self.lines {
+            let size = line.size(self.line_height);
+
+            if y >= previous_heights && y <= previous_heights + size.height {
+                return Some(line_idx);
+            }
+
+            line_idx += 1;
+            previous_heights += size.height;
+        }
+
+        None
+    }
 }
