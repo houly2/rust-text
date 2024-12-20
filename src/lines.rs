@@ -11,26 +11,23 @@ impl Lines {
         Self { lines, line_height }
     }
 
-    pub fn position_for_index_in_line(
-        &self,
-        index: usize,
-        line_number: usize,
-    ) -> Option<Point<Pixels>> {
-        let mut previous_heights = px(0.);
-        if line_number > 0 {
-            for n in 0..line_number {
+    pub fn position_for_index_in_line(&self, index: usize, line_number: usize) -> Point<Pixels> {
+        let previous_heights = self.height_till_line_idx(line_number);
+        let line = self.lines.get(line_number).unwrap();
+        let position_in_line = line.position_for_index(index, self.line_height).unwrap();
+        point(position_in_line.x, position_in_line.y + previous_heights)
+    }
+
+    pub fn height_till_line_idx(&self, line_idx: usize) -> Pixels {
+        let mut heights = px(0.);
+        if line_idx > 0 {
+            for n in 0..line_idx {
                 if let Some(line) = self.lines.get(n) {
-                    previous_heights += line.size(self.line_height).height;
+                    heights += line.size(self.line_height).height;
                 }
             }
         }
-
-        let line = self.lines.get(line_number)?;
-        let position_in_line = line.position_for_index(index, self.line_height)?;
-        Some(point(
-            position_in_line.x,
-            position_in_line.y + previous_heights,
-        ))
+        heights
     }
 
     pub fn index_for_position(&self, position: Point<Pixels>) -> Option<(usize, usize)> {

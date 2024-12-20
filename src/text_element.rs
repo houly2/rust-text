@@ -1,6 +1,7 @@
 use crate::lines::Lines;
 use crate::text_input::TextInput;
 use gpui::*;
+use smallvec::SmallVec;
 
 pub struct TextElement {
     input: View<TextInput>,
@@ -13,10 +14,12 @@ impl TextElement {
 }
 
 pub struct PrepaintState {
+    offset: Point<Pixels>,
     bounds: Bounds<Pixels>,
     lines: Option<Lines>,
     cursor: Option<PaintQuad>,
     selections: Option<Vec<PaintQuad>>,
+    scroll_bar: Option<SmallVec<[PaintQuad; 2]>>,
 }
 
 impl IntoElement for TextElement {
@@ -117,28 +120,39 @@ impl Element for TextElement {
 
         let selections: Option<Vec<PaintQuad>>;
         let paint_cursor: Option<PaintQuad>;
+        let scroll_bar: Option<SmallVec<[PaintQuad; 2]>>;
+
+        let line_idx = display_text.char_to_line(cursor);
+        let char_idx = display_text.line_to_byte(line_idx);
+        let cursor_idx = display_text.char_to_byte(cursor);
+        let cursor_pos = lines.position_for_index_in_line(cursor_idx - char_idx, line_idx);
+
+        // this is not the right place, because it only handles curor position. skips scroll movement without cursor change
+
+        let mut offset = point(px(0.), px(0.));
+
+        let height = lines.height_till_line_idx(line_idx) + lines.line_height;
+        let lower_bound = new_bounds.origin.y + new_bounds.size.height * 0.8; // should be in line_height
+        if height > lower_bound {
+            offset.y = -(height - lower_bound);
+        }
+
+        // todo: x offset
+
+        let scroll_manager = input.scroll_manager.read(cx);
+        scroll_bar = scroll_manager.paint_bar(bounds, lines.height(), offset);
 
         if input.blink_manager.read(cx).show() {
-            let line_idx = display_text.char_to_line(cursor);
-            let char_idx = display_text.line_to_byte(line_idx);
-            let cursor_idx = display_text.char_to_byte(cursor);
-
-            paint_cursor = if let Some(cursor_pos) =
-                lines.position_for_index_in_line(cursor_idx - char_idx, line_idx)
-            {
-                Some(fill(
-                    Bounds::new(
-                        point(
-                            new_bounds.left() + cursor_pos.x,
-                            new_bounds.top() + cursor_pos.y,
-                        ),
-                        size(px(2.), line_height),
+            paint_cursor = Some(fill(
+                Bounds::new(
+                    point(
+                        new_bounds.left() + cursor_pos.x,
+                        new_bounds.top() + cursor_pos.y,
                     ),
-                    rgb(0xcdd6f4),
-                ))
-            } else {
-                None
-            };
+                    size(px(2.), line_height),
+                ),
+                rgb(0xcdd6f4),
+            ))
         } else {
             paint_cursor = None;
         }
@@ -157,95 +171,110 @@ impl Element for TextElement {
             let end_char_idx = display_text.line_to_byte(end_line_idx);
             let end_point = lines.position_for_index_in_line(end - end_char_idx, end_line_idx);
 
-            selections = match (start_point, end_point) {
-                (Some(start), Some(end)) => {
-                    let selection_color = rgba(0x7f849c64);
-                    let line_count: u32 = ((end.y - start.y) / lines.line_height).round() as u32;
+            selections = {
+                let selection_color = rgba(0x7f849c64);
+                let line_count: u32 =
+                    ((end_point.y - start_point.y) / lines.line_height).round() as u32;
 
-                    if line_count == 0 {
-                        Some(vec![fill(
-                            Bounds::from_corners(
-                                point(new_bounds.left() + start.x, new_bounds.top() + start.y),
-                                point(
-                                    new_bounds.left() + end.x,
-                                    new_bounds.top() + end.y + line_height,
-                                ),
+                if line_count == 0 {
+                    Some(vec![fill(
+                        Bounds::from_corners(
+                            point(
+                                new_bounds.left() + start_point.x,
+                                new_bounds.top() + start_point.y,
                             ),
-                            selection_color,
-                        )])
-                    } else if line_count == 1 {
-                        let mut selections = Vec::new();
-                        selections.push(fill(
-                            Bounds::from_corners(
-                                point(new_bounds.left() + start.x, new_bounds.top() + start.y),
-                                point(new_bounds.right(), new_bounds.top() + start.y + line_height),
+                            point(
+                                new_bounds.left() + end_point.x,
+                                new_bounds.top() + end_point.y + line_height,
                             ),
-                            selection_color,
-                        ));
-                        selections.push(fill(
-                            Bounds::from_corners(
-                                point(new_bounds.left(), new_bounds.top() + end.y),
-                                point(
-                                    new_bounds.left() + end.x,
-                                    new_bounds.top() + end.y + line_height,
-                                ),
+                        ),
+                        selection_color,
+                    )])
+                } else if line_count == 1 {
+                    let mut selections = Vec::new();
+                    selections.push(fill(
+                        Bounds::from_corners(
+                            point(
+                                new_bounds.left() + start_point.x,
+                                new_bounds.top() + start_point.y,
                             ),
-                            selection_color,
-                        ));
-                        Some(selections)
-                    } else {
-                        let mut selections = Vec::new();
-                        selections.push(fill(
-                            Bounds::from_corners(
-                                point(new_bounds.left() + start.x, new_bounds.top() + start.y),
-                                point(new_bounds.right(), new_bounds.top() + start.y + line_height),
+                            point(
+                                new_bounds.right(),
+                                new_bounds.top() + start_point.y + line_height,
                             ),
-                            selection_color,
-                        ));
+                        ),
+                        selection_color,
+                    ));
+                    selections.push(fill(
+                        Bounds::from_corners(
+                            point(new_bounds.left(), new_bounds.top() + end_point.y),
+                            point(
+                                new_bounds.left() + end_point.x,
+                                new_bounds.top() + end_point.y + line_height,
+                            ),
+                        ),
+                        selection_color,
+                    ));
+                    Some(selections)
+                } else {
+                    let mut selections = Vec::new();
+                    selections.push(fill(
+                        Bounds::from_corners(
+                            point(
+                                new_bounds.left() + start_point.x,
+                                new_bounds.top() + start_point.y,
+                            ),
+                            point(
+                                new_bounds.right(),
+                                new_bounds.top() + start_point.y + line_height,
+                            ),
+                        ),
+                        selection_color,
+                    ));
 
-                        for n in 1..line_count {
-                            selections.push(fill(
-                                Bounds::from_corners(
-                                    point(
-                                        new_bounds.left(),
-                                        new_bounds.top()
-                                            + start.y
-                                            + px(n as f32) * lines.line_height,
-                                    ),
-                                    point(
-                                        new_bounds.right(),
-                                        new_bounds.top()
-                                            + start.y
-                                            + px(n as f32) * lines.line_height
-                                            + lines.line_height,
-                                    ),
-                                ),
-                                selection_color,
-                            ));
-                        }
-
+                    for n in 1..line_count {
                         selections.push(fill(
                             Bounds::from_corners(
-                                point(new_bounds.left(), new_bounds.top() + end.y),
                                 point(
-                                    new_bounds.left() + end.x,
-                                    new_bounds.top() + end.y + line_height,
+                                    new_bounds.left(),
+                                    new_bounds.top()
+                                        + start_point.y
+                                        + px(n as f32) * lines.line_height,
+                                ),
+                                point(
+                                    new_bounds.right(),
+                                    new_bounds.top()
+                                        + start_point.y
+                                        + px(n as f32) * lines.line_height
+                                        + lines.line_height,
                                 ),
                             ),
                             selection_color,
                         ));
-                        Some(selections)
                     }
+
+                    selections.push(fill(
+                        Bounds::from_corners(
+                            point(new_bounds.left(), new_bounds.top() + end_point.y),
+                            point(
+                                new_bounds.left() + end_point.x,
+                                new_bounds.top() + end_point.y + line_height,
+                            ),
+                        ),
+                        selection_color,
+                    ));
+                    Some(selections)
                 }
-                _ => None,
             }
         }
 
         PrepaintState {
+            offset,
             bounds: new_bounds,
             lines: Some(lines),
             cursor: paint_cursor,
             selections,
+            scroll_bar,
         }
     }
 
@@ -265,12 +294,14 @@ impl Element for TextElement {
 
         if let Some(selections) = prepaint.selections.take() {
             for selection in selections {
+                let mut selection = selection.clone();
+                selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;
                 cx.paint_quad(selection);
             }
         }
 
         let line_height = cx.line_height();
-        let mut offset_y = px(0.);
+        let mut offset_y = prepaint.offset.y;
         let lines = prepaint.lines.take().unwrap();
         for line in &lines.lines {
             let size = line.size(line_height);
@@ -287,12 +318,21 @@ impl Element for TextElement {
         }
 
         if let Some(cursor) = prepaint.cursor.take() {
+            let mut cursor = cursor.clone();
+            cursor.bounds.origin.y = prepaint.offset.y + cursor.bounds.origin.y;
             cx.paint_quad(cursor);
+        }
+
+        if let Some(scroll_bar) = prepaint.scroll_bar.take() {
+            for bar in scroll_bar {
+                cx.paint_quad(bar);
+            }
         }
 
         self.input.update(cx, |input, _cx| {
             input.last_layout = Some(lines);
             input.last_bounds = Some(prepaint.bounds);
+            input.last_offset = Some(prepaint.offset);
         });
     }
 }

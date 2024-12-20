@@ -1,3 +1,4 @@
+use crate::scroll_manager::ScrollManager;
 use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
 use gpui::*;
@@ -46,9 +47,11 @@ pub struct TextInput {
     pub marked_range: Option<Range<usize>>,
     pub last_layout: Option<Lines>,
     pub last_bounds: Option<Bounds<Pixels>>,
+    pub last_offset: Option<Point<Pixels>>,
     is_selecting: bool,
 
     pub blink_manager: Model<BlinkManager>,
+    pub scroll_manager: Model<ScrollManager>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -56,6 +59,7 @@ pub struct TextInput {
 impl TextInput {
     pub fn new(cx: &mut ViewContext<Self>) -> Self {
         let blink_manager = cx.new_model(|_| BlinkManager::new());
+        let scroll_manager = cx.new_model(|_| ScrollManager::new());
 
         Self {
             focus_handle: cx.focus_handle(),
@@ -65,8 +69,10 @@ impl TextInput {
             marked_range: None,
             last_layout: None,
             last_bounds: None,
+            last_offset: None,
             is_selecting: false,
             blink_manager: blink_manager.clone(),
+            scroll_manager: scroll_manager.clone(),
             _subscriptions: vec![
                 cx.observe(&blink_manager, |_, _, cx| cx.notify()),
                 cx.observe_window_activation(|this, cx| {
@@ -205,19 +211,27 @@ impl TextInput {
             return 0;
         }
 
-        let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
-        else {
+        let (Some(bounds), Some(lines), Some(offset)) = (
+            self.last_bounds.as_ref(),
+            self.last_layout.as_ref(),
+            self.last_offset.as_ref(),
+        ) else {
             return 0;
         };
+
+        let offset_position = point(position.x + offset.x, position.y + offset.y.abs());
 
         if position.y < bounds.top() {
             return 0;
         }
-        if position.y > bounds.bottom() || position.y > lines.height() {
+        if position.y > bounds.bottom() || offset_position.y > lines.height() {
             return self.content.len_chars();
         }
 
-        let pos = point(position.x - bounds.left(), position.y - bounds.top());
+        let pos = point(
+            offset_position.x - bounds.left(),
+            offset_position.y - bounds.top(),
+        );
 
         if let Some((line_idx, byte_idx)) = lines.index_for_position(pos) {
             let line = self.content.line_to_byte(line_idx);
@@ -331,8 +345,7 @@ impl TextInput {
             let line_idx = self.content.char_to_line(position);
             let char_idx = self.content.line_to_byte(line_idx);
             let cursor_idx = self.content.char_to_byte(position);
-
-            return layout.position_for_index_in_line(cursor_idx - char_idx, line_idx);
+            return Some(layout.position_for_index_in_line(cursor_idx - char_idx, line_idx));
         }
         None
     }
@@ -480,6 +493,7 @@ impl Render for TextInput {
             .flex()
             .h_full()
             .w_full()
+            .overflow_hidden()
             .key_context("TextInput")
             .track_focus(&self.focus_handle(cx))
             .cursor(CursorStyle::IBeam)
