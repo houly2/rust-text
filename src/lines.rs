@@ -72,4 +72,13 @@ impl Lines {
 
         None
     }
+
+    pub fn height(&self) -> Pixels {
+        let mut height = px(0.);
+        for line in &self.lines {
+            let size = line.size(self.line_height);
+            height += size.height;
+        }
+        height
+    }
 }

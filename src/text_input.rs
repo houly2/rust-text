@@ -213,7 +213,7 @@ impl TextInput {
         if position.y < bounds.top() {
             return 0;
         }
-        if position.y > bounds.bottom() {
+        if position.y > bounds.bottom() || position.y > lines.height() {
             return self.content.len_chars();
         }
 
