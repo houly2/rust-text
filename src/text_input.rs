@@ -225,9 +225,8 @@ impl TextInput {
         }
 
         if let Some(line_idx) = lines.line_idx_for_y(pos.y) {
-            let line = self.content.line_to_byte(line_idx);
-            let end_of_line = self.position_for_end_of_line(line);
-            return self.content.byte_to_char(end_of_line);
+            let line = self.content.line_to_char(line_idx);
+            return self.position_for_end_of_line(line);
         }
 
         return 0;
