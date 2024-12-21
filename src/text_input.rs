@@ -74,6 +74,7 @@ impl TextInput {
             blink_manager: blink_manager.clone(),
             scroll_manager: scroll_manager.clone(),
             _subscriptions: vec![
+                cx.observe(&scroll_manager, |_, _, cx| cx.notify()),
                 cx.observe(&blink_manager, |_, _, cx| cx.notify()),
                 cx.observe_window_activation(|this, cx| {
                     let active = cx.is_window_active();
@@ -246,6 +247,15 @@ impl TextInput {
         return 0;
     }
 
+    fn on_scroll_wheel(&mut self, event: &ScrollWheelEvent, cx: &mut ViewContext<Self>) {
+        if let (Some(lines), Some(bounds)) = (self.last_layout.as_ref(), self.last_bounds.as_ref())
+        {
+            self.scroll_manager.update(cx, |this, cx| {
+                this.calc_offset_after_scroll(event.delta, lines, bounds, cx)
+            })
+        };
+    }
+
     fn show_character_palette(&mut self, _: &ShowCharacterPalette, cx: &mut ViewContext<Self>) {
         cx.show_character_palette();
     }
@@ -312,6 +322,16 @@ impl TextInput {
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
         self.blink_manager.update(cx, BlinkManager::pause);
+
+        if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
+        {
+            let line_idx = self.content.char_to_line(self.cursor_offset());
+
+            self.scroll_manager.update(cx, |this, _| {
+                this.calc_offset_after_move(line_idx, lines, bounds)
+            });
+        };
+
         cx.notify();
     }
 
@@ -527,6 +547,7 @@ impl Render for TextInput {
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_scroll_wheel(cx.listener(Self::on_scroll_wheel))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .child(
                 div()

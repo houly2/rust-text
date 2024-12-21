@@ -2,6 +2,7 @@ use gpui::*;
 
 mod blink_manager;
 mod lines;
+mod scroll_manager;
 mod text_element;
 mod text_input;
 

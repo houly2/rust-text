@@ -1,5 +1,3 @@
-use std::cmp;
-
 use crate::lines::Lines;
 use crate::text_input::TextInput;
 use gpui::*;
@@ -130,25 +128,8 @@ impl Element for TextElement {
         let cursor_pos = lines.position_for_index_in_line(cursor_idx - char_idx, line_idx);
 
         let scroll_manager = input.scroll_manager.read(cx);
-
-        let mut offset = input.last_offset.unwrap_or(point(px(0.), px(0.)));
-        let position_in_height = lines.height_till_line_idx(line_idx) + lines.line_height;
-        let substract_height_lower = new_bounds.origin.y + new_bounds.size.height * 0.1; // todo: should be in line_height
-        let substract_height_upper = new_bounds.origin.y + new_bounds.size.height * 0.8; // todo: should be in line_height
-        let lower_bound = offset.y.abs() + substract_height_lower;
-        let upper_bound = offset.y.abs() + substract_height_upper;
-
-        if position_in_height < lower_bound {
-            offset.y = cmp::min(-(position_in_height - substract_height_lower), px(0.));
-        }
-
-        if position_in_height > upper_bound {
-            offset.y = -(position_in_height - substract_height_upper);
-        }
-
-        scroll_bar = scroll_manager.paint_bar(bounds, lines.height(), offset);
-
-        // todo: x offset
+        scroll_bar = scroll_manager.paint_bar(bounds, lines.height());
+        let offset = scroll_manager.offset;
 
         if input.blink_manager.read(cx).show() {
             paint_cursor = Some(fill(
