@@ -284,6 +284,7 @@ impl Element for TextElement {
         if let Some(selections) = prepaint.selections.take() {
             for selection in selections {
                 let mut selection = selection.clone();
+                selection.bounds.origin.x = prepaint.offset.x + selection.bounds.origin.x;
                 selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;
                 cx.paint_quad(selection);
             }
@@ -296,7 +297,7 @@ impl Element for TextElement {
             let size = line.size(line_height);
             line.paint(
                 point(
-                    prepaint.bounds.origin.x,
+                    prepaint.bounds.origin.x + prepaint.offset.x,
                     prepaint.bounds.origin.y + offset_y,
                 ),
                 line_height,
@@ -308,6 +309,7 @@ impl Element for TextElement {
 
         if let Some(cursor) = prepaint.cursor.take() {
             let mut cursor = cursor.clone();
+            cursor.bounds.origin.x = prepaint.offset.x + cursor.bounds.origin.x;
             cursor.bounds.origin.y = prepaint.offset.y + cursor.bounds.origin.y;
             cx.paint_quad(cursor);
         }

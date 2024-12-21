@@ -323,14 +323,16 @@ impl TextInput {
         self.selected_range = offset..offset;
         self.blink_manager.update(cx, BlinkManager::pause);
 
-        if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
-        {
-            let line_idx = self.content.char_to_line(self.cursor_offset());
-
+        if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref()) {
+            let line_idx = self.content.char_to_line(offset);
+            let char_idx = self.content.line_to_byte(line_idx);
+            let cursor_idx = self.content.char_to_byte(offset);
+            let cursor_pos = lines.position_for_index_in_line(cursor_idx - char_idx, line_idx);
+            
             self.scroll_manager.update(cx, |this, _| {
-                this.calc_offset_after_move(line_idx, lines, bounds)
+                this.calc_offset_after_move(line_idx, cursor_pos.x, lines, bounds)
             });
-        };
+        }
 
         cx.notify();
     }

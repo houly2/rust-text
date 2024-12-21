@@ -1,12 +1,14 @@
 use gpui::*;
 use smallvec::{smallvec, SmallVec};
-use std::cmp;
 
 use crate::lines::Lines;
 
 pub struct ScrollManager {
     pub width: Pixels,
     pub offset: Point<Pixels>,
+    padding_top: Pixels,
+    padding_bottom: Pixels,
+    padding_horizontal: Pixels,
 }
 
 impl ScrollManager {
@@ -14,30 +16,47 @@ impl ScrollManager {
         Self {
             width: px(16.),
             offset: point(px(0.), px(0.)),
+            padding_top: px(2.),
+            padding_bottom: px(4.),
+            padding_horizontal: px(32.),
         }
+    }
+
+    pub fn is_in_scrollbar(&self, position: Point<Pixels>, bounds: &Bounds<Pixels>) -> bool {
+        position.x >= bounds.right() - self.width
     }
 
     pub fn calc_offset_after_move(
         &mut self,
         line_idx: usize,
+        cursor_x: Pixels,
         lines: &Lines,
         bounds: &Bounds<Pixels>,
     ) {
-        let position_in_height = lines.height_till_line_idx(line_idx) + lines.line_height;
-        let substract_height_lower = bounds.origin.y + bounds.size.height * 0.1; // todo: should be in line_height
-        let substract_height_upper = bounds.origin.y + bounds.size.height * 0.8; // todo: should be in line_height
-        let lower_bound = self.offset.y.abs() + substract_height_lower;
-        let upper_bound = self.offset.y.abs() + substract_height_upper;
+        let cursor_screen_x = cursor_x + self.offset.x;
 
-        if position_in_height < lower_bound {
-            self.offset.y = cmp::min(-(position_in_height - substract_height_lower), px(0.));
-        }
+        self.offset.x = if cursor_screen_x < bounds.origin.x + self.padding_horizontal {
+            px(0.).min(-(cursor_x - (bounds.origin.x + self.padding_horizontal)))
+        } else if cursor_screen_x > bounds.origin.x + bounds.size.width - self.padding_horizontal {
+            -(cursor_x - bounds.size.width + self.padding_horizontal)
+        } else {
+            self.offset.x
+        };
 
-        if position_in_height > upper_bound {
-            self.offset.y = -(position_in_height - substract_height_upper);
-        }
+        let cursor_y = lines.height_till_line_idx(line_idx) + lines.line_height;
+        let margin_top = bounds.origin.y + lines.line_height * self.padding_top;
+        let margin_bottom =
+            bounds.origin.y + bounds.size.height - lines.line_height * self.padding_bottom;
+        let lower_bound = self.offset.y.abs() + margin_top;
+        let upper_bound = self.offset.y.abs() + margin_bottom;
 
-        // todo: x offset
+        self.offset.y = if cursor_y < lower_bound {
+            px(0.).min(-(cursor_y - margin_top))
+        } else if cursor_y > upper_bound {
+            -(cursor_y - margin_bottom)
+        } else {
+            self.offset.y
+        };
     }
 
     pub fn calc_offset_after_scroll(
@@ -48,10 +67,15 @@ impl ScrollManager {
         cx: &mut ModelContext<Self>,
     ) {
         let d = delta.pixel_delta(lines.line_height);
-        let upper_bound = -(lines.height() - bounds.size.height * 0.9);
-        self.offset.y = cmp::min(px(0.), cmp::max(upper_bound, self.offset.y + d.y));
 
-        // todo: x offset
+        let content_width = lines.width();
+        let upper_bound_x = -(content_width - bounds.size.width);
+        self.offset.x = px(0.).min(upper_bound_x.max(self.offset.x + d.x));
+
+        let upper_bound_y =
+            -(lines.height() - bounds.size.height + lines.line_height * self.padding_bottom);
+        self.offset.y = px(0.).min(upper_bound_y.max(self.offset.y + d.y));
+
         cx.notify();
     }
 

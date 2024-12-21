@@ -20,11 +20,9 @@ impl Lines {
 
     pub fn height_till_line_idx(&self, line_idx: usize) -> Pixels {
         let mut heights = px(0.);
-        if line_idx > 0 {
-            for n in 0..line_idx {
-                if let Some(line) = self.lines.get(n) {
-                    heights += line.size(self.line_height).height;
-                }
+        for n in 0..line_idx {
+            if let Some(line) = self.lines.get(n) {
+                heights += line.size(self.line_height).height;
             }
         }
         heights
@@ -77,5 +75,14 @@ impl Lines {
             height += size.height;
         }
         height
+    }
+
+    pub fn width(&self) -> Pixels {
+        let mut max_width = px(0.);
+        for line in &self.lines {
+            let size = line.size(self.line_height);
+            max_width = max_width.max(size.width);
+        }
+        max_width
     }
 }
