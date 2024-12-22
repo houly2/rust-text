@@ -398,7 +398,11 @@ impl TextInput {
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
         self.blink_manager.update(cx, BlinkManager::pause);
+        self.update_scroll_manager(offset, cx);
+        cx.notify();
+    }
 
+    fn update_scroll_manager(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         {
             let line_idx = self.content.char_to_line(offset);
@@ -410,8 +414,6 @@ impl TextInput {
                 this.calc_offset_after_move(line_idx, cursor_pos.x, lines, bounds, cx)
             });
         }
-
-        cx.notify();
     }
 
     pub fn cursor_offset(&self) -> usize {
@@ -434,6 +436,7 @@ impl TextInput {
             self.selected_range = self.selected_range.end..self.selected_range.start;
         }
 
+        self.update_scroll_manager(offset, cx);
         cx.notify();
     }
 
