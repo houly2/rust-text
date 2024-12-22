@@ -3,8 +3,12 @@ use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement
 
 use gpui::*;
 use ropey::*;
+use std::fs;
 use std::ops::Range;
+use std::path::PathBuf;
 use unicode_segmentation::*;
+
+actions!(set_menus, [Open]);
 
 actions!(
     text_input,
@@ -92,6 +96,45 @@ impl TextInput {
 
     pub fn insert(&mut self, text: String, cx: &mut ViewContext<Self>) {
         self.replace_text_in_range(None, &text, cx);
+    }
+
+    fn open(&mut self, _: &Open, cx: &mut ViewContext<Self>) {
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+        });
+
+        cx.spawn(|this, mut cx| async move {
+            match Flatten::flatten(paths.await.map_err(|e| e.into())) {
+                Ok(Some(paths)) => {
+                    cx.update(|cx| {
+                        // cx.add_recent_document(path);
+                        // todo: handle multiple files
+                        if let Some(this) = this.upgrade() {
+                            this.update(cx, |this, cx| {
+                                for path in paths {
+                                    this.read_file(path, cx);
+                                    break;
+                                }
+                            });
+                        }
+                    })
+                    .ok();
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    println!("open file error: {}", err)
+                }
+            }
+        })
+        .detach();
+    }
+
+    pub fn read_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
+        if let Ok(new_content) = fs::read_to_string(path) {
+            self.insert(new_content.into(), cx)
+        }
     }
 
     fn new_line(&mut self, _: &NewLine, cx: &mut ViewContext<Self>) {
@@ -546,6 +589,7 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::select_word_end))
             .on_action(cx.listener(Self::select_line_start))
             .on_action(cx.listener(Self::select_line_end))
+            .on_action(cx.listener(Self::open))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))

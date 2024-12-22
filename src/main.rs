@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use gpui::*;
 
 mod blink_manager;
@@ -67,6 +69,8 @@ fn main() {
             KeyBinding::new("shift-alt-right", SelectWordEnd, None),
             KeyBinding::new("shift-cmd-left", SelectLineStart, None),
             KeyBinding::new("shift-cmd-right", SelectLineEnd, None),
+            KeyBinding::new("cmd-q", Quit, None),
+            KeyBinding::new("cmd-o", Open, None),
         ]);
 
         let window = cx
@@ -101,10 +105,17 @@ fn main() {
         .detach();
 
         cx.on_action(quit);
-        cx.set_menus(vec![Menu {
-            name: "set_menus".into(),
-            items: vec![MenuItem::action("Quit", Quit)],
-        }]);
+
+        cx.set_menus(vec![
+            Menu {
+                name: "Text".into(),
+                items: vec![MenuItem::action("Quit", Quit)],
+            },
+            Menu {
+                name: "File".into(),
+                items: vec![MenuItem::action("Open", Open)],
+            },
+        ]);
 
         window
             .update(cx, |view, cx| {
