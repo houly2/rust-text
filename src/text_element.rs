@@ -180,32 +180,34 @@ impl Element for TextElement {
                         selection_color,
                     )])
                 } else if line_count == 1 {
-                    let mut selections = Vec::new();
-                    selections.push(fill(
-                        Bounds::from_corners(
-                            point(
-                                new_bounds.left() + start_point.x,
-                                new_bounds.top() + start_point.y,
+                    let start_line = lines.line(start_line_idx).unwrap();
+                    Some(vec![
+                        fill(
+                            Bounds::from_corners(
+                                point(
+                                    new_bounds.left() + start_point.x,
+                                    new_bounds.top() + start_point.y,
+                                ),
+                                point(
+                                    new_bounds.left() + start_line.size(lines.line_height).width,
+                                    new_bounds.top() + start_point.y + line_height,
+                                ),
                             ),
-                            point(
-                                new_bounds.right(),
-                                new_bounds.top() + start_point.y + line_height,
-                            ),
+                            selection_color,
                         ),
-                        selection_color,
-                    ));
-                    selections.push(fill(
-                        Bounds::from_corners(
-                            point(new_bounds.left(), new_bounds.top() + end_point.y),
-                            point(
-                                new_bounds.left() + end_point.x,
-                                new_bounds.top() + end_point.y + line_height,
+                        fill(
+                            Bounds::from_corners(
+                                point(new_bounds.left(), new_bounds.top() + end_point.y),
+                                point(
+                                    new_bounds.left() + end_point.x,
+                                    new_bounds.top() + end_point.y + line_height,
+                                ),
                             ),
+                            selection_color,
                         ),
-                        selection_color,
-                    ));
-                    Some(selections)
+                    ])
                 } else {
+                    let start_line = lines.line(start_line_idx).unwrap();
                     let mut selections = Vec::new();
                     selections.push(fill(
                         Bounds::from_corners(
@@ -214,7 +216,7 @@ impl Element for TextElement {
                                 new_bounds.top() + start_point.y,
                             ),
                             point(
-                                new_bounds.right(),
+                                new_bounds.left() + start_line.size(lines.line_height).width,
                                 new_bounds.top() + start_point.y + line_height,
                             ),
                         ),
@@ -222,6 +224,7 @@ impl Element for TextElement {
                     ));
 
                     for n in 1..line_count {
+                        let line = lines.line(start_line_idx + n as usize).unwrap();
                         selections.push(fill(
                             Bounds::from_corners(
                                 point(
@@ -231,7 +234,7 @@ impl Element for TextElement {
                                         + px(n as f32) * lines.line_height,
                                 ),
                                 point(
-                                    new_bounds.right(),
+                                    new_bounds.left() + line.size(lines.line_height).width,
                                     new_bounds.top()
                                         + start_point.y
                                         + px(n as f32) * lines.line_height

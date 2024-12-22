@@ -85,4 +85,8 @@ impl Lines {
         }
         max_width
     }
+
+    pub fn line(&self, line_number: usize) -> Option<&WrappedLine> {
+        self.lines.get(line_number)
+    }
 }
