@@ -53,6 +53,7 @@ pub struct TextInput {
     pub last_bounds: Option<Bounds<Pixels>>,
     pub last_offset: Option<Point<Pixels>>,
     is_selecting: bool,
+    is_scroll_dragging: bool,
 
     pub blink_manager: Model<BlinkManager>,
     pub scroll_manager: Model<ScrollManager>,
@@ -75,6 +76,7 @@ impl TextInput {
             last_bounds: None,
             last_offset: None,
             is_selecting: false,
+            is_scroll_dragging: false,
             blink_manager: blink_manager.clone(),
             scroll_manager: scroll_manager.clone(),
             _subscriptions: vec![
@@ -227,6 +229,21 @@ impl TextInput {
     }
 
     fn on_mouse_down(&mut self, event: &MouseDownEvent, cx: &mut ViewContext<Self>) {
+        if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
+        {
+            if self
+                .scroll_manager
+                .read(cx)
+                .is_in_scrollbar(event.position, bounds)
+            {
+                self.is_scroll_dragging = true;
+                self.scroll_manager.update(cx, |this, cx| {
+                    this.scroll_to(event.position, lines, bounds, cx)
+                });
+                return;
+            }
+        }
+
         self.is_selecting = true;
 
         if event.modifiers.shift {
@@ -247,11 +264,20 @@ impl TextInput {
 
     fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut ViewContext<Self>) {
         self.is_selecting = false;
+        self.is_scroll_dragging = false;
     }
 
     fn on_mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut ViewContext<Self>) {
         if self.is_selecting {
             self.select_to(self.index_for_mouse_position(event.position), cx);
+        } else if self.is_scroll_dragging {
+            if let (Some(bounds), Some(lines)) =
+                (self.last_bounds.as_ref(), self.last_layout.as_ref())
+            {
+                self.scroll_manager.update(cx, |this, cx| {
+                    this.scroll_to(event.position, lines, bounds, cx)
+                });
+            }
         }
     }
 

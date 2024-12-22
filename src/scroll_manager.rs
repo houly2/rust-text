@@ -133,6 +133,21 @@ impl ScrollManager {
         cx.notify();
     }
 
+    pub fn scroll_to(
+        &mut self,
+        position: Point<Pixels>,
+        lines: &Lines,
+        bounds: &Bounds<Pixels>,
+        cx: &mut ModelContext<Self>,
+    ) {
+        let height = lines.height();
+        let percentage = (position.y - bounds.origin.y) / bounds.size.height;
+        self.offset.y = px(0.).min(-(height - bounds.size.height / 2.) * percentage);
+
+        self.show(self.show_epoch, cx);
+        cx.notify();
+    }
+
     pub fn paint_bar(
         &self,
         bounds: Bounds<Pixels>,
