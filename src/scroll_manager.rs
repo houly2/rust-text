@@ -100,6 +100,8 @@ impl ScrollManager {
         let lower_bound = self.offset.y.abs() + margin_top;
         let upper_bound = self.offset.y.abs() + margin_bottom;
 
+        let old_offset_y = self.offset.y;
+
         self.offset.y = if cursor_y < lower_bound {
             px(0.).min(-(cursor_y - margin_top))
         } else if cursor_y > upper_bound {
@@ -108,7 +110,10 @@ impl ScrollManager {
             self.offset.y
         };
 
-        self.show(self.show_epoch, cx);
+        if old_offset_y != self.offset.y {
+            self.show(self.show_epoch, cx);
+            cx.notify();
+        }
     }
 
     pub fn calc_offset_after_scroll(
