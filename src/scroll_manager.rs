@@ -43,10 +43,19 @@ impl ScrollManager {
             self.offset.x
         };
 
+        // adjust padding when bounds are smaller
+
+        let (p_top, p_bottom) = if bounds.size.height
+            < self.padding_top * lines.line_height + self.padding_bottom * lines.line_height
+        {
+            (px(0.), px(1.))
+        } else {
+            (self.padding_top, self.padding_bottom)
+        };
+
         let cursor_y = lines.height_till_line_idx(line_idx) + lines.line_height;
-        let margin_top = bounds.origin.y + lines.line_height * self.padding_top;
-        let margin_bottom =
-            bounds.origin.y + bounds.size.height - lines.line_height * self.padding_bottom;
+        let margin_top = bounds.origin.y + lines.line_height * p_top;
+        let margin_bottom = bounds.origin.y + bounds.size.height - lines.line_height * p_bottom;
         let lower_bound = self.offset.y.abs() + margin_top;
         let upper_bound = self.offset.y.abs() + margin_bottom;
 
