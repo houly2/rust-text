@@ -250,13 +250,15 @@ impl TextInput {
             self.select_to(self.index_for_mouse_position(event.position), cx);
         } else if event.click_count == 2 {
             let offset = self.index_for_mouse_position(event.position);
-            let prev = self.start_of_word(offset);
+            let prev = self.start_of_word(self.next_boundary(offset));
             let next = self.end_of_word(offset);
-            self.move_to(next, cx);
-            self.select_to(prev, cx);
+            self.move_to(prev, cx);
+            self.select_to(next, cx);
         } else if event.click_count == 3 {
-            self.move_to(self.content.len_chars(), cx);
-            self.select_to(0, cx);
+            let start_of_line_idx = self.position_for_start_of_line();
+            self.move_to(start_of_line_idx, cx);
+            let end_of_line_idx = self.position_for_end_of_line(self.cursor_offset());
+            self.select_to(end_of_line_idx, cx);
         } else {
             self.move_to(self.index_for_mouse_position(event.position), cx)
         }
