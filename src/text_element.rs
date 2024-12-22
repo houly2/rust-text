@@ -11,6 +11,19 @@ impl TextElement {
     pub fn new(input: View<TextInput>) -> Self {
         Self { input }
     }
+
+    fn get_line_selection_bounds(
+        &self,
+        bounds: &Bounds<Pixels>,
+        start: Point<Pixels>,
+        end: Point<Pixels>,
+        line_height: Pixels,
+    ) -> Bounds<Pixels> {
+        Bounds::from_corners(
+            point(bounds.left() + start.x, bounds.top() + start.y),
+            point(bounds.left() + end.x, bounds.top() + start.y + line_height),
+        )
+    }
 }
 
 pub struct PrepaintState {
@@ -164,99 +177,86 @@ impl Element for TextElement {
                 let selection_color = rgba(0x7f849c64);
                 let line_count: u32 =
                     ((end_point.y - start_point.y) / lines.line_height).round() as u32;
+                let mut selection_quads = Vec::new();
 
-                if line_count == 0 {
-                    Some(vec![fill(
-                        Bounds::from_corners(
-                            point(
-                                new_bounds.left() + start_point.x,
-                                new_bounds.top() + start_point.y,
-                            ),
-                            point(
-                                new_bounds.left() + end_point.x,
-                                new_bounds.top() + end_point.y + line_height,
-                            ),
-                        ),
-                        selection_color,
-                    )])
-                } else if line_count == 1 {
-                    let start_line = lines.line(start_line_idx).unwrap();
-                    Some(vec![
-                        fill(
-                            Bounds::from_corners(
-                                point(
-                                    new_bounds.left() + start_point.x,
-                                    new_bounds.top() + start_point.y,
-                                ),
-                                point(
-                                    new_bounds.left() + start_line.size(lines.line_height).width,
-                                    new_bounds.top() + start_point.y + line_height,
-                                ),
+                match line_count {
+                    0 => {
+                        // Single-line selection
+                        let bounds = self.get_line_selection_bounds(
+                            &new_bounds,
+                            start_point,
+                            end_point,
+                            line_height,
+                        );
+                        selection_quads.push(fill(bounds, selection_color));
+                    }
+                    1 => {
+                        // Two-line selection
+                        let start_line = lines.line(start_line_idx).unwrap();
+                        let first_line_end =
+                            point(start_line.size(lines.line_height).width, start_point.y);
+                        let second_line_start = point(px(0.), end_point.y);
+
+                        selection_quads.push(fill(
+                            self.get_line_selection_bounds(
+                                &new_bounds,
+                                start_point,
+                                first_line_end,
+                                line_height,
                             ),
                             selection_color,
-                        ),
-                        fill(
-                            Bounds::from_corners(
-                                point(new_bounds.left(), new_bounds.top() + end_point.y),
-                                point(
-                                    new_bounds.left() + end_point.x,
-                                    new_bounds.top() + end_point.y + line_height,
-                                ),
-                            ),
-                            selection_color,
-                        ),
-                    ])
-                } else {
-                    let start_line = lines.line(start_line_idx).unwrap();
-                    let mut selections = Vec::new();
-                    selections.push(fill(
-                        Bounds::from_corners(
-                            point(
-                                new_bounds.left() + start_point.x,
-                                new_bounds.top() + start_point.y,
-                            ),
-                            point(
-                                new_bounds.left() + start_line.size(lines.line_height).width,
-                                new_bounds.top() + start_point.y + line_height,
-                            ),
-                        ),
-                        selection_color,
-                    ));
-
-                    for n in 1..line_count {
-                        let line = lines.line(start_line_idx + n as usize).unwrap();
-                        selections.push(fill(
-                            Bounds::from_corners(
-                                point(
-                                    new_bounds.left(),
-                                    new_bounds.top()
-                                        + start_point.y
-                                        + px(n as f32) * lines.line_height,
-                                ),
-                                point(
-                                    new_bounds.left() + line.size(lines.line_height).width,
-                                    new_bounds.top()
-                                        + start_point.y
-                                        + px(n as f32) * lines.line_height
-                                        + lines.line_height,
-                                ),
+                        ));
+                        selection_quads.push(fill(
+                            self.get_line_selection_bounds(
+                                &new_bounds,
+                                second_line_start,
+                                end_point,
+                                line_height,
                             ),
                             selection_color,
                         ));
                     }
+                    _ => {
+                        // Multi-line selection
+                        let start_line = lines.line(start_line_idx).unwrap();
 
-                    selections.push(fill(
-                        Bounds::from_corners(
-                            point(new_bounds.left(), new_bounds.top() + end_point.y),
-                            point(
-                                new_bounds.left() + end_point.x,
-                                new_bounds.top() + end_point.y + line_height,
+                        // First line
+                        let first_line_end =
+                            point(start_line.size(lines.line_height).width, start_point.y);
+                        selection_quads.push(fill(
+                            self.get_line_selection_bounds(
+                                &new_bounds,
+                                start_point,
+                                first_line_end,
+                                line_height,
                             ),
-                        ),
-                        selection_color,
-                    ));
-                    Some(selections)
+                            selection_color,
+                        ));
+
+                        // Middle lines
+                        for n in 1..line_count {
+                            let line = lines.line(start_line_idx + n as usize).unwrap();
+                            let line_y = start_point.y + px(n as f32) * lines.line_height;
+                            let line_bounds = self.get_line_selection_bounds(
+                                &new_bounds,
+                                point(px(0.), line_y),
+                                point(line.size(lines.line_height).width, line_y),
+                                line_height,
+                            );
+                            selection_quads.push(fill(line_bounds, selection_color));
+                        }
+
+                        // Last line
+                        let last_line_bounds = self.get_line_selection_bounds(
+                            &new_bounds,
+                            point(px(0.), end_point.y),
+                            end_point,
+                            line_height,
+                        );
+                        selection_quads.push(fill(last_line_bounds, selection_color));
+                    }
                 }
+                Some(selection_quads)
             }
         }
 
