@@ -210,6 +210,15 @@ impl TextInput {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.content.slice(self.selected_range.clone()).to_string(),
             ));
+        } else {
+            let start_of_line_idx = self.position_for_start_of_line();
+            let end_of_line_idx =
+                self.next_boundary(self.position_for_end_of_line(self.cursor_offset()));
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                self.content
+                    .slice(start_of_line_idx..end_of_line_idx)
+                    .to_string(),
+            ));
         }
     }
 
@@ -225,6 +234,16 @@ impl TextInput {
                 self.content.slice(self.selected_range.clone()).to_string(),
             ));
             self.replace_text_in_range(None, "", cx);
+        } else {
+            let start_of_line_idx = self.position_for_start_of_line();
+            let end_of_line_idx =
+                self.next_boundary(self.position_for_end_of_line(self.cursor_offset()));
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                self.content
+                    .slice(start_of_line_idx..end_of_line_idx)
+                    .to_string(),
+            ));
+            self.replace_text_in_range(Some(start_of_line_idx..end_of_line_idx), "", cx);
         }
     }
 
