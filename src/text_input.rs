@@ -82,6 +82,11 @@ impl TextInput {
                 cx.observe(&blink_manager, |_, _, cx| cx.notify()),
                 cx.observe_window_activation(|this, cx| {
                     let active = cx.is_window_active();
+                    if active {
+                        this.scroll_manager.update(cx, |scroll_manager, cx| {
+                            scroll_manager.enable(cx);
+                        });
+                    }
                     this.blink_manager.update(cx, |blink_manager, cx| {
                         if active {
                             blink_manager.enable(cx);
@@ -366,14 +371,15 @@ impl TextInput {
         self.selected_range = offset..offset;
         self.blink_manager.update(cx, BlinkManager::pause);
 
-        if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref()) {
+        if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
+        {
             let line_idx = self.content.char_to_line(offset);
             let char_idx = self.content.line_to_byte(line_idx);
             let cursor_idx = self.content.char_to_byte(offset);
             let cursor_pos = lines.position_for_index_in_line(cursor_idx - char_idx, line_idx);
-            
-            self.scroll_manager.update(cx, |this, _| {
-                this.calc_offset_after_move(line_idx, cursor_pos.x, lines, bounds)
+
+            self.scroll_manager.update(cx, |this, cx| {
+                this.calc_offset_after_move(line_idx, cursor_pos.x, lines, bounds, cx)
             });
         }
 

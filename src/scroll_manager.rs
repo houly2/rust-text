@@ -1,9 +1,14 @@
+use std::time::Duration;
+
 use gpui::*;
 use smallvec::{smallvec, SmallVec};
 
 use crate::lines::Lines;
 
 pub struct ScrollManager {
+    show: bool,
+    show_duration: Duration,
+    show_epoch: usize,
     pub width: Pixels,
     pub offset: Point<Pixels>,
     padding_top: Pixels,
@@ -14,12 +19,48 @@ pub struct ScrollManager {
 impl ScrollManager {
     pub fn new() -> Self {
         Self {
+            show: true,
+            show_duration: Duration::from_millis(1000),
+            show_epoch: 0,
             width: px(16.),
             offset: point(px(0.), px(0.)),
             padding_top: px(2.),
             padding_bottom: px(4.),
             padding_horizontal: px(32.),
         }
+    }
+
+    fn next_epoch(&mut self) -> usize {
+        self.show_epoch += 1;
+        self.show_epoch
+    }
+
+    fn show(&mut self, epoch: usize, cx: &mut ModelContext<Self>) {
+        if epoch == self.show_epoch {
+            self.show = true;
+            cx.notify();
+
+            let epoch = self.next_epoch();
+            let duration = self.show_duration;
+            cx.spawn(|this, mut cx| async move {
+                Timer::after(duration).await;
+                if let Some(this) = this.upgrade() {
+                    this.update(&mut cx, |this, cx| this.hide(epoch, cx)).ok();
+                }
+            })
+            .detach();
+        }
+    }
+
+    fn hide(&mut self, epoch: usize, cx: &mut ModelContext<Self>) {
+        if epoch == self.show_epoch {
+            self.show = false;
+            cx.notify();
+        }
+    }
+
+    pub fn enable(&mut self, cx: &mut ModelContext<Self>) {
+        self.show(self.show_epoch, cx);
     }
 
     pub fn is_in_scrollbar(&self, position: Point<Pixels>, bounds: &Bounds<Pixels>) -> bool {
@@ -32,6 +73,7 @@ impl ScrollManager {
         cursor_x: Pixels,
         lines: &Lines,
         bounds: &Bounds<Pixels>,
+        cx: &mut ModelContext<Self>,
     ) {
         let cursor_screen_x = cursor_x + self.offset.x;
 
@@ -44,7 +86,6 @@ impl ScrollManager {
         };
 
         // adjust padding when bounds are smaller
-
         let (p_top, p_bottom) = if bounds.size.height
             < self.padding_top * lines.line_height + self.padding_bottom * lines.line_height
         {
@@ -66,6 +107,8 @@ impl ScrollManager {
         } else {
             self.offset.y
         };
+
+        self.show(self.show_epoch, cx);
     }
 
     pub fn calc_offset_after_scroll(
@@ -85,6 +128,8 @@ impl ScrollManager {
             -(lines.height() - bounds.size.height + lines.line_height * self.padding_bottom);
         self.offset.y = px(0.).min(upper_bound_y.max(self.offset.y + d.y));
 
+        self.show(self.show_epoch, cx);
+
         cx.notify();
     }
 
@@ -93,7 +138,7 @@ impl ScrollManager {
         bounds: Bounds<Pixels>,
         text_height: Pixels,
     ) -> Option<SmallVec<[PaintQuad; 2]>> {
-        if bounds.size.height >= text_height {
+        if bounds.size.height >= text_height || !self.show {
             return None;
         }
 
