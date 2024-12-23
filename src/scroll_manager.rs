@@ -228,7 +228,7 @@ impl ScrollManager {
                     point(own_bounds.left() + px(3.), cursor_bar_pos),
                     size(self.width - px(6.), px(2.))
                 ),
-                rgba(0x7287fd)
+                rgba(0x89b4fadd)
             )
         ])
     }

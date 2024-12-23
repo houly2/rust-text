@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use gpui::*;
 
 mod blink_manager;
+mod command;
 mod lines;
 mod scroll_manager;
 mod text_element;
@@ -71,6 +72,8 @@ fn main() {
             KeyBinding::new("shift-cmd-right", SelectLineEnd, None),
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-o", Open, None),
+            KeyBinding::new("cmd-z", Undo, None),
+            KeyBinding::new("cmd-shift-z", Redo, None),
         ]);
 
         let window = cx
@@ -114,6 +117,13 @@ fn main() {
             Menu {
                 name: "File".into(),
                 items: vec![MenuItem::action("Open", Open)],
+            },
+            Menu {
+                name: "Edit".into(),
+                items: vec![
+                    MenuItem::action("Undo", Undo),
+                    MenuItem::action("Redo", Redo),
+                ],
             },
         ]);
 

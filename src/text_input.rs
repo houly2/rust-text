@@ -1,3 +1,4 @@
+use crate::command::{Command, DeleteCommand, InsertCommand};
 use crate::scroll_manager::ScrollManager;
 use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
@@ -40,6 +41,8 @@ actions!(
         SelectWordEnd,
         SelectLineStart,
         SelectLineEnd,
+        Undo,
+        Redo
     ]
 );
 
@@ -57,6 +60,9 @@ pub struct TextInput {
 
     pub blink_manager: Model<BlinkManager>,
     pub scroll_manager: Model<ScrollManager>,
+
+    undo_stack: Vec<Box<dyn Command>>,
+    redo_stack: Vec<Box<dyn Command>>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -79,6 +85,8 @@ impl TextInput {
             is_scroll_dragging: false,
             blink_manager: blink_manager.clone(),
             scroll_manager: scroll_manager.clone(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             _subscriptions: vec![
                 cx.observe(&scroll_manager, |_, _, cx| cx.notify()),
                 cx.observe(&blink_manager, |_, _, cx| cx.notify()),
@@ -98,6 +106,29 @@ impl TextInput {
                     });
                 }),
             ],
+        }
+    }
+
+    pub fn execute_command(&mut self, command: Box<dyn Command>, cx: &mut ViewContext<Self>) {
+        command.execute(&mut self.content);
+        self.undo_stack.push(command);
+        self.redo_stack.clear();
+        cx.notify();
+    }
+
+    pub fn undo(&mut self, _: &Undo, cx: &mut ViewContext<Self>) {
+        if let Some(command) = self.undo_stack.pop() {
+            let prev_selection = command.undo(&mut self.content);
+            self.redo_stack.push(command);
+            self.update_selected_range(prev_selection, cx);
+        }
+    }
+
+    pub fn redo(&mut self, _: &Redo, cx: &mut ViewContext<Self>) {
+        if let Some(command) = self.redo_stack.pop() {
+            let new_selection = command.execute(&mut self.content);
+            self.undo_stack.push(command);
+            self.update_selected_range(new_selection, cx);
         }
     }
 
@@ -140,7 +171,8 @@ impl TextInput {
 
     pub fn read_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
         if let Ok(new_content) = fs::read_to_string(path) {
-            self.insert(new_content.into(), cx)
+            self.insert(new_content.into(), cx);
+            self.move_to(0, cx);
         }
     }
 
@@ -606,6 +638,13 @@ impl TextInput {
             self.content.len_chars()
         }
     }
+
+    fn update_selected_range(&mut self, range: Range<usize>, cx: &mut ViewContext<Self>) {
+        self.selected_range = range;
+        self.marked_range.take();
+        self.blink_manager.update(cx, BlinkManager::pause);
+        cx.notify();
+    }
 }
 
 impl Render for TextInput {
@@ -645,6 +684,8 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::select_word_end))
             .on_action(cx.listener(Self::select_line_start))
             .on_action(cx.listener(Self::select_line_end))
+            .on_action(cx.listener(Self::undo))
+            .on_action(cx.listener(Self::redo))
             .on_action(cx.listener(Self::open))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
@@ -711,16 +752,31 @@ impl ViewInputHandler for TextInput {
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
 
-        self.content.remove(range.start..range.end);
-        self.content.insert(range.start, text);
+        if range.start != range.end {
+            let old_text = self.content.slice(range.clone()).to_string();
+            self.execute_command(
+                Box::new(DeleteCommand::new(
+                    range.start,
+                    old_text,
+                    self.selected_range.clone(),
+                )),
+                cx,
+            );
+        }
+
+        if !text.is_empty() {
+            self.execute_command(
+                Box::new(InsertCommand::new(
+                    range.start,
+                    text.to_string(),
+                    self.selected_range.clone(),
+                )),
+                cx,
+            );
+        }
 
         let l = text.chars().count();
-        self.selected_range = range.start + l..range.start + l;
-        self.marked_range.take();
-
-        self.blink_manager.update(cx, BlinkManager::pause);
-
-        cx.notify();
+        self.update_selected_range(range.start + l..range.start + l, cx);
     }
 
     fn replace_and_mark_text_in_range(
