@@ -33,6 +33,7 @@ pub struct PrepaintState {
     cursor: Option<PaintQuad>,
     selections: Option<Vec<PaintQuad>>,
     scroll_bar: Option<SmallVec<[PaintQuad; 2]>>,
+    scroll_bar_hitbox: Hitbox,
 }
 
 impl IntoElement for TextElement {
@@ -141,7 +142,7 @@ impl Element for TextElement {
         let cursor_pos = lines.position_for_index_in_line(cursor_idx - char_idx, line_idx);
 
         let scroll_manager = input.scroll_manager.read(cx);
-        scroll_bar = scroll_manager.paint_bar(bounds, lines.height());
+        scroll_bar = scroll_manager.paint_bar(&bounds, lines.height());
         let offset = scroll_manager.offset;
 
         if input.blink_manager.read(cx).show() {
@@ -267,6 +268,7 @@ impl Element for TextElement {
             cursor: paint_cursor,
             selections,
             scroll_bar,
+            scroll_bar_hitbox: cx.insert_hitbox(scroll_manager.bounds(&bounds), false),
         }
     }
 
@@ -322,6 +324,8 @@ impl Element for TextElement {
                 cx.paint_quad(bar);
             }
         }
+
+        cx.set_cursor_style(CursorStyle::Arrow, &prepaint.scroll_bar_hitbox);
 
         self.input.update(cx, |input, _cx| {
             input.last_layout = Some(lines);

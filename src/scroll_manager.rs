@@ -153,9 +153,16 @@ impl ScrollManager {
         cx.notify();
     }
 
+    pub fn bounds(&self, bounds: &Bounds<Pixels>) -> Bounds<Pixels> {
+        Bounds::new(
+            point(bounds.right() - self.width, bounds.top()),
+            size(self.width, bounds.size.height),
+        )
+    }
+
     pub fn paint_bar(
         &self,
-        bounds: Bounds<Pixels>,
+        bounds: &Bounds<Pixels>,
         text_height: Pixels,
     ) -> Option<SmallVec<[PaintQuad; 2]>> {
         if bounds.size.height >= text_height || !self.show {
@@ -172,10 +179,7 @@ impl ScrollManager {
 
         Some(smallvec![
             quad(
-                Bounds::new(
-                    point(bounds.right() - self.width, bounds.top()),
-                    size(self.width, bounds.size.height),
-                ),
+                self.bounds(bounds),
                 Corners {
                     top_left: px(0.),
                     top_right: px(0.),
