@@ -164,6 +164,7 @@ impl ScrollManager {
         &self,
         bounds: &Bounds<Pixels>,
         text_height: Pixels,
+        cursor_pos: Point<Pixels>,
     ) -> Option<SmallVec<[PaintQuad; 2]>> {
         if bounds.size.height >= text_height || !self.show {
             return None;
@@ -177,9 +178,13 @@ impl ScrollManager {
         let offset_y = (bounds.size.height - height - px(2.0))
             * ((self.offset.y.abs()) / (text_height - bounds.size.height * 0.8));
 
+        let own_bounds = self.bounds(bounds);
+        let cursor_bar_pos =
+            own_bounds.top() + (own_bounds.size.height * (cursor_pos.y / text_height));
+
         Some(smallvec![
             quad(
-                self.bounds(bounds),
+                own_bounds,
                 Corners {
                     top_left: px(0.),
                     top_right: px(0.),
@@ -198,8 +203,8 @@ impl ScrollManager {
             quad(
                 Bounds::new(
                     point(
-                        bounds.right() - self.width + px(3.),
-                        bounds.top() + px(1.) + offset_y
+                        own_bounds.left() + px(3.),
+                        own_bounds.top() + px(1.) + offset_y
                     ),
                     size(self.width - px(6.), height),
                 ),
@@ -216,7 +221,14 @@ impl ScrollManager {
                     bottom: px(1.),
                     left: px(1.),
                 },
-                rgba(0x2e2e4d00),
+                rgb(0x2e2e4d),
+            ),
+            fill(
+                Bounds::new(
+                    point(own_bounds.left() + px(3.), cursor_bar_pos),
+                    size(self.width - px(6.), px(2.))
+                ),
+                rgba(0x7287fd)
             )
         ])
     }

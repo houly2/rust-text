@@ -142,7 +142,7 @@ impl Element for TextElement {
         let cursor_pos = lines.position_for_index_in_line(cursor_idx - char_idx, line_idx);
 
         let scroll_manager = input.scroll_manager.read(cx);
-        scroll_bar = scroll_manager.paint_bar(&bounds, lines.height());
+        scroll_bar = scroll_manager.paint_bar(&bounds, lines.height(), cursor_pos);
         let offset = scroll_manager.offset;
 
         if input.blink_manager.read(cx).show() {
