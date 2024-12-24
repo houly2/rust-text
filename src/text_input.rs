@@ -37,10 +37,14 @@ actions!(
         MoveToWordEnd,
         MoveToLineStart,
         MoveToLineEnd,
+        MoveToDocStart,
+        MoveToDocEnd,
         SelectWordStart,
         SelectWordEnd,
         SelectLineStart,
         SelectLineEnd,
+        SelectDocStart,
+        SelectDocEnd,
         Undo,
         Redo
     ]
@@ -446,6 +450,22 @@ impl TextInput {
         self.move_to(self.position_for_end_of_line(self.cursor_offset()), cx)
     }
 
+    fn move_to_doc_start(&mut self, _: &MoveToDocStart, cx: &mut ViewContext<Self>) {
+        self.move_to(0, cx);
+    }
+
+    fn move_to_doc_end(&mut self, _: &MoveToDocEnd, cx: &mut ViewContext<Self>) {
+        self.move_to(self.content.len_chars(), cx);
+    }
+
+    fn select_doc_start(&mut self, _: &SelectDocStart, cx: &mut ViewContext<Self>) {
+        self.select_to(0, cx);
+    }
+
+    fn select_doc_end(&mut self, _: &SelectDocEnd, cx: &mut ViewContext<Self>) {
+        self.select_to(self.content.len_chars(), cx);
+    }
+
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
         self.blink_manager.update(cx, BlinkManager::pause);
@@ -647,8 +667,6 @@ impl TextInput {
     }
 
     fn status_bar_selection_format(&self) -> String {
-        // "12:12 (1 Line, 4 Characters)"
-
         let line_idx = self.content.char_to_line(self.cursor_offset());
         let line_char_idx = self.content.line_to_char(line_idx);
         let char_idx_in_line = self.cursor_offset() - line_char_idx;
@@ -721,10 +739,14 @@ impl Render for TextInput {
                     .on_action(cx.listener(Self::move_to_word_end))
                     .on_action(cx.listener(Self::move_to_line_start))
                     .on_action(cx.listener(Self::move_to_line_end))
+                    .on_action(cx.listener(Self::move_to_doc_start))
+                    .on_action(cx.listener(Self::move_to_doc_end))
                     .on_action(cx.listener(Self::select_word_start))
                     .on_action(cx.listener(Self::select_word_end))
                     .on_action(cx.listener(Self::select_line_start))
                     .on_action(cx.listener(Self::select_line_end))
+                    .on_action(cx.listener(Self::select_doc_start))
+                    .on_action(cx.listener(Self::select_doc_end))
                     .on_action(cx.listener(Self::undo))
                     .on_action(cx.listener(Self::redo))
                     .on_action(cx.listener(Self::open))
