@@ -645,64 +645,107 @@ impl TextInput {
         self.blink_manager.update(cx, BlinkManager::pause);
         cx.notify();
     }
+
+    fn status_bar_selection_format(&self) -> String {
+        // "12:12 (1 Line, 4 Characters)"
+
+        let line_idx = self.content.char_to_line(self.cursor_offset());
+        let line_char_idx = self.content.line_to_char(line_idx);
+        let char_idx_in_line = self.cursor_offset() - line_char_idx;
+
+        let selection = if !self.selected_range.is_empty() {
+            let start_line_idx = self.content.char_to_line(self.selected_range.start);
+            let end_line_idx = self.content.char_to_line(self.selected_range.end);
+            let line_count = (start_line_idx as isize - end_line_idx as isize).abs();
+            if line_count > 0 {
+                format!(
+                    " ({} lines, {} chars)",
+                    line_count + 1,
+                    (self.selected_range.start as isize - self.selected_range.end as isize).abs()
+                )
+            } else {
+                format!(
+                    " ({} chars)",
+                    (self.selected_range.start as isize - self.selected_range.end as isize).abs()
+                )
+            }
+        } else {
+            "".to_string()
+        };
+
+        format!("{}:{}{}", line_idx + 1, char_idx_in_line + 1, selection)
+    }
 }
 
 impl Render for TextInput {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
             .flex()
+            .flex_col()
             .h_full()
             .w_full()
-            .overflow_hidden()
-            .key_context("TextInput")
-            .track_focus(&self.focus_handle(cx))
-            .cursor(CursorStyle::IBeam)
-            .on_action(cx.listener(Self::new_line))
-            .on_action(cx.listener(Self::new_line_without_split))
-            .on_action(cx.listener(Self::backspace))
-            .on_action(cx.listener(Self::delete))
-            .on_action(cx.listener(Self::left))
-            .on_action(cx.listener(Self::right))
-            .on_action(cx.listener(Self::up))
-            .on_action(cx.listener(Self::down))
-            .on_action(cx.listener(Self::home))
-            .on_action(cx.listener(Self::end))
-            .on_action(cx.listener(Self::select_left))
-            .on_action(cx.listener(Self::select_right))
-            .on_action(cx.listener(Self::select_up))
-            .on_action(cx.listener(Self::select_down))
-            .on_action(cx.listener(Self::select_all))
-            .on_action(cx.listener(Self::show_character_palette))
-            .on_action(cx.listener(Self::copy))
-            .on_action(cx.listener(Self::paste))
-            .on_action(cx.listener(Self::cut))
-            .on_action(cx.listener(Self::move_to_word_start))
-            .on_action(cx.listener(Self::move_to_word_end))
-            .on_action(cx.listener(Self::move_to_line_start))
-            .on_action(cx.listener(Self::move_to_line_end))
-            .on_action(cx.listener(Self::select_word_start))
-            .on_action(cx.listener(Self::select_word_end))
-            .on_action(cx.listener(Self::select_line_start))
-            .on_action(cx.listener(Self::select_line_end))
-            .on_action(cx.listener(Self::undo))
-            .on_action(cx.listener(Self::redo))
-            .on_action(cx.listener(Self::open))
-            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
-            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
-            .on_scroll_wheel(cx.listener(Self::on_scroll_wheel))
-            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .text_color(rgb(0xcdd6f4))
+            .font_family("Iosevka")
             .child(
                 div()
                     .flex()
                     .h_full()
                     .w_full()
+                    .overflow_hidden()
                     .bg(rgb(0x1e1e2e))
                     .line_height(px(28.))
                     .text_size(px(18.))
-                    .text_color(rgb(0xcdd6f4))
-                    .font_family("Iosevka")
+                    .key_context("TextInput")
+                    .track_focus(&self.focus_handle(cx))
+                    .cursor(CursorStyle::IBeam)
+                    .on_action(cx.listener(Self::new_line))
+                    .on_action(cx.listener(Self::new_line_without_split))
+                    .on_action(cx.listener(Self::backspace))
+                    .on_action(cx.listener(Self::delete))
+                    .on_action(cx.listener(Self::left))
+                    .on_action(cx.listener(Self::right))
+                    .on_action(cx.listener(Self::up))
+                    .on_action(cx.listener(Self::down))
+                    .on_action(cx.listener(Self::home))
+                    .on_action(cx.listener(Self::end))
+                    .on_action(cx.listener(Self::select_left))
+                    .on_action(cx.listener(Self::select_right))
+                    .on_action(cx.listener(Self::select_up))
+                    .on_action(cx.listener(Self::select_down))
+                    .on_action(cx.listener(Self::select_all))
+                    .on_action(cx.listener(Self::show_character_palette))
+                    .on_action(cx.listener(Self::copy))
+                    .on_action(cx.listener(Self::paste))
+                    .on_action(cx.listener(Self::cut))
+                    .on_action(cx.listener(Self::move_to_word_start))
+                    .on_action(cx.listener(Self::move_to_word_end))
+                    .on_action(cx.listener(Self::move_to_line_start))
+                    .on_action(cx.listener(Self::move_to_line_end))
+                    .on_action(cx.listener(Self::select_word_start))
+                    .on_action(cx.listener(Self::select_word_end))
+                    .on_action(cx.listener(Self::select_line_start))
+                    .on_action(cx.listener(Self::select_line_end))
+                    .on_action(cx.listener(Self::undo))
+                    .on_action(cx.listener(Self::redo))
+                    .on_action(cx.listener(Self::open))
+                    .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+                    .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
+                    .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
+                    .on_scroll_wheel(cx.listener(Self::on_scroll_wheel))
+                    .on_mouse_move(cx.listener(Self::on_mouse_move))
                     .child(TextElement::new(cx.view().clone())),
+            )
+            .child(
+                div()
+                    .flex()
+                    .w_full()
+                    .px(px(8.))
+                    .pt(px(2.))
+                    .pb(px(4.))
+                    // .bg(black())
+                    .text_size(px(14.))
+                    .child(div().flex_grow())
+                    .child(self.status_bar_selection_format()),
             )
     }
 }
