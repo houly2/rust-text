@@ -203,25 +203,25 @@ impl ScrollManager {
             quad(
                 Bounds::new(
                     point(
-                        own_bounds.left() + px(3.),
+                        own_bounds.left() + px(4.),
                         own_bounds.top() + px(1.) + offset_y
                     ),
-                    size(self.width - px(6.), height),
+                    size(self.width - px(8.), height),
                 ),
                 Corners {
-                    top_left: px(2.),
-                    top_right: px(2.),
-                    bottom_right: px(2.),
-                    bottom_left: px(2.),
+                    top_left: px(3.),
+                    top_right: px(3.),
+                    bottom_right: px(3.),
+                    bottom_left: px(3.),
                 },
-                rgba(0xaeaecd66),
+                rgba(0xaeaecd44),
                 Edges {
-                    top: px(1.),
-                    right: px(1.),
-                    bottom: px(1.),
-                    left: px(1.),
+                    top: px(0.),
+                    right: px(0.),
+                    bottom: px(0.),
+                    left: px(0.),
                 },
-                rgb(0x2e2e4d),
+                transparent_black()
             ),
             fill(
                 Bounds::new(
