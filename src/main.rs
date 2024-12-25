@@ -11,7 +11,7 @@ mod text_input;
 
 use crate::text_input::*;
 
-actions!(set_menus, [Quit, Hide]);
+actions!(set_menus, [Quit, Hide, FileNew]);
 
 fn quit(_: &Quit, cx: &mut AppContext) {
     cx.quit();
@@ -19,6 +19,41 @@ fn quit(_: &Quit, cx: &mut AppContext) {
 
 fn hide(_: &Hide, cx: &mut AppContext) {
     cx.hide();
+}
+
+fn file_new(_: &FileNew, cx: &mut AppContext) {
+    let window = cx
+        .open_window(
+            WindowOptions {
+                titlebar: Some(TitlebarOptions {
+                    title: None,
+                    appears_transparent: true,
+                    traffic_light_position: Some(point(px(9.0), px(9.0))),
+                }),
+                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(400.), px(320.)),
+                    cx,
+                ))),
+                window_min_size: Some(size(px(200.), px(160.))),
+                ..Default::default()
+            },
+            |cx| {
+                let text_input = cx.new_view(|cx| TextInput::new(cx));
+                cx.new_view(|cx| InputExample {
+                    text_input,
+                    focus_handle: cx.focus_handle(),
+                })
+            },
+        )
+        .unwrap();
+
+    window
+        .update(cx, |view, cx| {
+            cx.focus_view(&view.text_input);
+            cx.activate(true);
+        })
+        .unwrap();
 }
 
 struct InputExample {
@@ -82,6 +117,7 @@ fn main() {
             KeyBinding::new("cmd-o", Open, None),
             KeyBinding::new("cmd-h", Hide, None),
             KeyBinding::new("cmd-z", Undo, None),
+            KeyBinding::new("cmd-n", FileNew, None),
             KeyBinding::new("cmd-shift-z", Redo, None),
         ]);
 
@@ -93,12 +129,25 @@ fn main() {
                         appears_transparent: true,
                         traffic_light_position: Some(point(px(9.0), px(9.0))),
                     }),
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                        None,
+                        size(px(400.), px(320.)),
+                        cx,
+                    ))),
+                    window_min_size: Some(size(px(200.), px(160.))),
                     ..Default::default()
                 },
                 |cx| {
                     let text_input = cx.new_view(|cx| {
+                        // TextInput::new(cx)
                         let mut element = TextInput::new(cx);
-                        element.insert("This is just ä Test! Ω≈ Haha.\nOtherwise i need to input this text all the time myself.\nAnd some more.".into(), cx);
+                        // element.insert("Ä\nBBB BB BBBBB\nCCC".into(), cx);
+                        // element.insert("Ä\nBΩB BB BBBBB\nCCC".into(), cx);
+                        // element.insert("This is just ä Test! Ω≈ Haha.\nOtherwise i need to input this text all the time myself.\nAnd some more.".into(), cx);
+
+                        element
+                            .read_file(PathBuf::from("/Users/philipwagner/Downloads/test.txt"), cx);
+
                         return element;
                     });
                     cx.new_view(|cx| InputExample {
@@ -118,6 +167,7 @@ fn main() {
 
         cx.on_action(quit);
         cx.on_action(hide);
+        cx.on_action(file_new);
 
         cx.set_menus(vec![
             Menu {
@@ -126,7 +176,11 @@ fn main() {
             },
             Menu {
                 name: "File".into(),
-                items: vec![MenuItem::action("Open", Open)],
+                items: vec![
+                    MenuItem::action("New", FileNew),
+                    MenuItem::separator(),
+                    MenuItem::action("Open", Open),
+                ],
             },
             Menu {
                 name: "Edit".into(),
