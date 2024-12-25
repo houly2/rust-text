@@ -11,10 +11,14 @@ mod text_input;
 
 use crate::text_input::*;
 
-actions!(set_menus, [Quit]);
+actions!(set_menus, [Quit, Hide]);
 
 fn quit(_: &Quit, cx: &mut AppContext) {
     cx.quit();
+}
+
+fn hide(_: &Hide, cx: &mut AppContext) {
+    cx.hide();
 }
 
 struct InputExample {
@@ -76,6 +80,7 @@ fn main() {
             KeyBinding::new("shift-cmd-down", SelectDocEnd, None),
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-o", Open, None),
+            KeyBinding::new("cmd-h", Hide, None),
             KeyBinding::new("cmd-z", Undo, None),
             KeyBinding::new("cmd-shift-z", Redo, None),
         ]);
@@ -112,6 +117,7 @@ fn main() {
         .detach();
 
         cx.on_action(quit);
+        cx.on_action(hide);
 
         cx.set_menus(vec![
             Menu {
@@ -128,6 +134,10 @@ fn main() {
                     MenuItem::action("Undo", Undo),
                     MenuItem::action("Redo", Redo),
                 ],
+            },
+            Menu {
+                name: "Window".into(),
+                items: vec![MenuItem::action("Hide", Hide)],
             },
         ]);
 
