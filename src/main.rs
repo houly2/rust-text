@@ -174,6 +174,8 @@ fn main() {
             Menu {
                 name: "Text".into(),
                 items: vec![
+                    MenuItem::action("About text...", About),
+                    MenuItem::separator(),
                     MenuItem::action("Hide", Hide),
                     MenuItem::action("Quit", Quit),
                 ],

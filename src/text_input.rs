@@ -9,7 +9,7 @@ use std::ops::Range;
 use std::path::PathBuf;
 use unicode_segmentation::*;
 
-actions!(set_menus, [Open]);
+actions!(set_menus, [Open, About]);
 
 actions!(
     text_input,
@@ -113,6 +113,15 @@ impl TextInput {
                 }),
             ],
         }
+    }
+
+    fn about(&mut self, _: &About, cx: &mut ViewContext<Self>) {
+        let message = format!("text");
+        let detail = format!("a little #DecemberAdventure text editor");
+        let prompt = cx.prompt(PromptLevel::Info, &message, Some(&detail), &["Ok"]);
+        cx.foreground_executor()
+            .spawn(async { prompt.await.ok() })
+            .detach();
     }
 
     pub fn execute_command(&mut self, command: Box<dyn Command>, cx: &mut ViewContext<Self>) {
@@ -762,6 +771,7 @@ impl Render for TextInput {
                     .on_action(cx.listener(Self::open))
                     .on_action(cx.listener(Self::minimize))
                     .on_action(cx.listener(Self::close_window))
+                    .on_action(cx.listener(Self::about))
                     .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
                     .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
                     .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
