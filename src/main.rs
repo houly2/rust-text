@@ -39,9 +39,8 @@ fn file_new(_: &FileNew, cx: &mut AppContext) {
                 ..Default::default()
             },
             |cx| {
-                let text_input = cx.new_view(|cx| TextInput::new(cx));
                 cx.new_view(|cx| InputExample {
-                    text_input,
+                    text_input: cx.new_view(|cx| TextInput::new(cx)),
                     focus_handle: cx.focus_handle(),
                 })
             },
@@ -119,6 +118,8 @@ fn main() {
             KeyBinding::new("cmd-z", Undo, None),
             KeyBinding::new("cmd-n", FileNew, None),
             KeyBinding::new("cmd-shift-z", Redo, None),
+            KeyBinding::new("cmd-w", WindowClose, None),
+            KeyBinding::new("cmd-m", Minimize, None),
         ]);
 
         let window = cx
@@ -172,7 +173,10 @@ fn main() {
         cx.set_menus(vec![
             Menu {
                 name: "Text".into(),
-                items: vec![MenuItem::action("Quit", Quit)],
+                items: vec![
+                    MenuItem::action("Hide", Hide),
+                    MenuItem::action("Quit", Quit),
+                ],
             },
             Menu {
                 name: "File".into(),
@@ -191,7 +195,7 @@ fn main() {
             },
             Menu {
                 name: "Window".into(),
-                items: vec![MenuItem::action("Hide", Hide)],
+                items: vec![MenuItem::action("Minimize", Minimize)],
             },
         ]);
 

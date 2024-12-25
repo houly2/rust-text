@@ -46,7 +46,9 @@ actions!(
         SelectDocStart,
         SelectDocEnd,
         Undo,
-        Redo
+        Redo,
+        WindowClose,
+        Minimize
     ]
 );
 
@@ -693,6 +695,14 @@ impl TextInput {
 
         format!("{}:{}{}", line_idx + 1, char_idx_in_line + 1, selection)
     }
+
+    fn minimize(&mut self, _: &Minimize, cx: &mut ViewContext<Self>) {
+        cx.minimize_window();
+    }
+
+    fn close_window(&mut self, _: &WindowClose, cx: &mut ViewContext<Self>) {
+        cx.remove_window();
+    }
 }
 
 impl Render for TextInput {
@@ -750,6 +760,8 @@ impl Render for TextInput {
                     .on_action(cx.listener(Self::undo))
                     .on_action(cx.listener(Self::redo))
                     .on_action(cx.listener(Self::open))
+                    .on_action(cx.listener(Self::minimize))
+                    .on_action(cx.listener(Self::close_window))
                     .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
                     .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
                     .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
