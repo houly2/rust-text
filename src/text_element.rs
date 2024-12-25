@@ -286,44 +286,48 @@ impl Element for TextElement {
             ElementInputHandler::new(bounds, self.input.clone()),
         );
 
-        if let Some(selections) = prepaint.selections.take() {
-            for selection in selections {
-                let mut selection = selection.clone();
-                selection.bounds.origin.x = prepaint.offset.x + selection.bounds.origin.x;
-                selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;
-                cx.paint_quad(selection);
-            }
-        }
-
-        let line_height = cx.line_height();
-        let mut offset_y = prepaint.offset.y;
         let lines = prepaint.lines.take().unwrap();
-        for line in &lines.lines {
-            let size = line.size(line_height);
-            line.paint(
-                point(
-                    prepaint.bounds.origin.x + prepaint.offset.x,
-                    prepaint.bounds.origin.y + offset_y,
-                ),
-                line_height,
-                cx,
-            )
-            .unwrap();
-            offset_y += size.height;
-        }
 
-        if let Some(cursor) = prepaint.cursor.take() {
-            let mut cursor = cursor.clone();
-            cursor.bounds.origin.x = prepaint.offset.x + cursor.bounds.origin.x;
-            cursor.bounds.origin.y = prepaint.offset.y + cursor.bounds.origin.y;
-            cx.paint_quad(cursor);
-        }
-
-        if let Some(scroll_bar) = prepaint.scroll_bar.take() {
-            for bar in scroll_bar {
-                cx.paint_quad(bar);
+        cx.with_content_mask(Some(ContentMask { bounds }), |cx| {
+            if let Some(selections) = prepaint.selections.take() {
+                for selection in selections {
+                    let mut selection = selection.clone();
+                    selection.bounds.origin.x = prepaint.offset.x + selection.bounds.origin.x;
+                    selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;
+                    cx.paint_quad(selection);
+                }
             }
-        }
+
+            let line_height = cx.line_height();
+            let mut offset_y = prepaint.offset.y;
+
+            for line in &lines.lines {
+                let size = line.size(line_height);
+                line.paint(
+                    point(
+                        prepaint.bounds.origin.x + prepaint.offset.x,
+                        prepaint.bounds.origin.y + offset_y,
+                    ),
+                    line_height,
+                    cx,
+                )
+                .unwrap();
+                offset_y += size.height;
+            }
+
+            if let Some(cursor) = prepaint.cursor.take() {
+                let mut cursor = cursor.clone();
+                cursor.bounds.origin.x = prepaint.offset.x + cursor.bounds.origin.x;
+                cursor.bounds.origin.y = prepaint.offset.y + cursor.bounds.origin.y;
+                cx.paint_quad(cursor);
+            }
+
+            if let Some(scroll_bar) = prepaint.scroll_bar.take() {
+                for bar in scroll_bar {
+                    cx.paint_quad(bar);
+                }
+            }
+        });
 
         cx.set_cursor_style(CursorStyle::Arrow, &prepaint.scroll_bar_hitbox);
 
