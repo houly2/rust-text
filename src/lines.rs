@@ -28,9 +28,9 @@ impl Lines {
             })
     }
 
-    pub fn index_for_position(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
+    pub fn byte_index_for_position(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
         let mut previous_heights = px(0.);
-        for (idx, line) in self.lines.iter().enumerate() {
+        for (line_idx, line) in self.lines.iter().enumerate() {
             let size = line.size(self.line_height);
             let temp_pos = point(position.x, position.y - previous_heights);
 
@@ -39,7 +39,7 @@ impl Lines {
             }
 
             if let Ok(index) = line.index_for_position(temp_pos, self.line_height) {
-                return Some((idx, index));
+                return Some((line_idx, index));
             }
 
             previous_heights += size.height;

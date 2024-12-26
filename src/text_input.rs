@@ -377,7 +377,7 @@ impl TextInput {
             offset_position.y - bounds.top(),
         );
 
-        if let Some((line_idx, byte_idx)) = lines.index_for_position(pos) {
+        if let Some((line_idx, byte_idx)) = lines.byte_index_for_position(pos) {
             let line = self.content.line_to_byte(line_idx);
             return self.content.byte_to_char(line + byte_idx);
         }
@@ -545,7 +545,8 @@ impl TextInput {
                 }
 
                 let prev_visual_line_pos = point(cursor_pos.x, y);
-                if let Some((line_idx, pos)) = layout.index_for_position(prev_visual_line_pos) {
+                if let Some((line_idx, pos)) = layout.byte_index_for_position(prev_visual_line_pos)
+                {
                     let line = self.content.line_to_byte(line_idx);
                     let char = self.content.byte_to_char(line + pos);
                     return Some(char);
@@ -564,9 +565,10 @@ impl TextInput {
         if let Some(cursor_pos) = self.position_from_layout(self.cursor_offset()) {
             if let Some(layout) = &self.last_layout {
                 let next_visual_line_pos = point(cursor_pos.x, cursor_pos.y + layout.line_height);
-                if let Some((line_idx, pos)) = layout.index_for_position(next_visual_line_pos) {
-                    let line = self.content.line_to_char(line_idx);
-                    return Some(line + pos);
+                if let Some((line_idx, pos)) = layout.byte_index_for_position(next_visual_line_pos)
+                {
+                    let line = self.content.line_to_byte(line_idx);
+                    return Some(self.content.byte_to_char(line + pos));
                 } else {
                     // did this line wrap?
                     let end_of_line = self.position_for_end_of_line(self.cursor_offset());
@@ -593,9 +595,9 @@ impl TextInput {
         if let Some(cursor_pos) = self.position_from_layout(self.cursor_offset()) {
             if let Some(layout) = &self.last_layout {
                 let start_of_line_pos = point(px(0.), cursor_pos.y);
-                if let Some((line_idx, pos)) = layout.index_for_position(start_of_line_pos) {
-                    let line = self.content.line_to_char(line_idx);
-                    return line + pos;
+                if let Some((line_idx, pos)) = layout.byte_index_for_position(start_of_line_pos) {
+                    let line = self.content.line_to_byte(line_idx);
+                    return self.content.byte_to_char(line + pos);
                 }
             }
         }
