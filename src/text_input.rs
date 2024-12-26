@@ -107,7 +107,7 @@ impl TextInput {
                         if active {
                             blink_manager.enable(cx);
                         } else {
-                            blink_manager.disable(cx);
+                            blink_manager.disable();
                         }
                     });
                 }),
@@ -367,7 +367,8 @@ impl TextInput {
         if position.y < bounds.top() {
             return 0;
         }
-        if position.y > bounds.bottom() || offset_position.y > lines.height() {
+
+        if position.y > bounds.bottom() || offset_position.y > bounds.origin.y + lines.height() {
             return self.content.len_chars();
         }
 

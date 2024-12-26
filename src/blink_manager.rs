@@ -23,7 +23,7 @@ impl BlinkManager {
     }
 
     fn blink(&mut self, epoch: usize, cx: &mut ModelContext<Self>) {
-        if epoch == self.epoch && self.enabled {
+        if epoch == self.epoch && self.enabled && !self.paused {
             self.show = !self.show;
             cx.notify();
 
@@ -49,7 +49,7 @@ impl BlinkManager {
         self.blink(self.epoch, cx);
     }
 
-    pub fn disable(&mut self, _: &mut ModelContext<Self>) {
+    pub fn disable(&mut self) {
         self.show = false;
         self.enabled = false;
     }
@@ -59,6 +59,8 @@ impl BlinkManager {
             self.show = true;
             cx.notify();
         }
+
+        self.paused = true;
 
         let epoch = self.next_epoch();
         let interval = self.blink_interval;

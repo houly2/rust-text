@@ -19,19 +19,18 @@ impl Lines {
     }
 
     pub fn height_till_line_idx(&self, line_idx: usize) -> Pixels {
-        let mut heights = px(0.);
-        for n in 0..line_idx {
-            if let Some(line) = self.lines.get(n) {
-                heights += line.size(self.line_height).height;
-            }
-        }
-        heights
+        self.lines
+            .iter()
+            .enumerate()
+            .take_while(|(idx, _)| *idx < line_idx)
+            .fold(px(0.), |total_height, (_, line)| {
+                total_height + line.size(self.line_height).height
+            })
     }
 
     pub fn index_for_position(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
         let mut previous_heights = px(0.);
-        let mut line_idx = 0;
-        for line in &self.lines {
+        for (idx, line) in self.lines.iter().enumerate() {
             let size = line.size(self.line_height);
             let temp_pos = point(position.x, position.y - previous_heights);
 
@@ -39,12 +38,10 @@ impl Lines {
                 return None;
             }
 
-            match line.index_for_position(temp_pos, self.line_height) {
-                Ok(v) => return Some((line_idx, v)),
-                _ => {}
+            if let Ok(index) = line.index_for_position(temp_pos, self.line_height) {
+                return Some((idx, index));
             }
 
-            line_idx += 1;
             previous_heights += size.height;
         }
 
@@ -53,15 +50,13 @@ impl Lines {
 
     pub fn line_idx_for_y(&self, y: Pixels) -> Option<usize> {
         let mut previous_heights = px(0.);
-        let mut line_idx = 0;
-        for line in &self.lines {
+        for (idx, line) in self.lines.iter().enumerate() {
             let size = line.size(self.line_height);
 
             if y >= previous_heights && y <= previous_heights + size.height {
-                return Some(line_idx);
+                return Some(idx);
             }
 
-            line_idx += 1;
             previous_heights += size.height;
         }
 
@@ -69,21 +64,15 @@ impl Lines {
     }
 
     pub fn height(&self) -> Pixels {
-        let mut height = px(0.);
-        for line in &self.lines {
-            let size = line.size(self.line_height);
-            height += size.height;
-        }
-        height
+        self.lines.iter().fold(px(0.), |height, line| {
+            height + line.size(self.line_height).height
+        })
     }
 
     pub fn width(&self) -> Pixels {
-        let mut max_width = px(0.);
-        for line in &self.lines {
-            let size = line.size(self.line_height);
-            max_width = max_width.max(size.width);
-        }
-        max_width
+        self.lines.iter().fold(px(0.), |max_width, line| {
+            max_width.max(line.size(self.line_height).width)
+        })
     }
 
     pub fn line(&self, line_number: usize) -> Option<&WrappedLine> {
