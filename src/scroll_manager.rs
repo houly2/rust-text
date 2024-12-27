@@ -11,8 +11,7 @@ pub struct ScrollManager {
     show_epoch: usize,
     pub width: Pixels,
     pub offset: Point<Pixels>,
-    padding_top: Pixels,
-    padding_bottom: Pixels,
+    padding_vertical: Pixels,
     padding_horizontal: Pixels,
 }
 
@@ -24,8 +23,7 @@ impl ScrollManager {
             show_epoch: 0,
             width: px(16.),
             offset: point(px(0.), px(0.)),
-            padding_top: px(2.),
-            padding_bottom: px(4.),
+            padding_vertical: px(2.),
             padding_horizontal: px(32.),
         }
     }
@@ -70,33 +68,38 @@ impl ScrollManager {
     pub fn calc_offset_after_move(
         &mut self,
         line_idx: usize,
-        cursor_x: Pixels,
+        cursor_idx: usize,
         lines: &Lines,
         bounds: &Bounds<Pixels>,
         cx: &mut ModelContext<Self>,
     ) {
-        let cursor_screen_x = cursor_x + self.offset.x;
+        let cursor_pos = lines.position_for_byte_idx_in_line(cursor_idx, line_idx);
+
+        let cursor_screen_x = cursor_pos.x + self.offset.x;
 
         self.offset.x = if cursor_screen_x < bounds.origin.x + self.padding_horizontal {
-            px(0.).min(-(cursor_x - (bounds.origin.x + self.padding_horizontal)))
+            px(0.).min(-(cursor_pos.x - (bounds.origin.x + self.padding_horizontal)))
         } else if cursor_screen_x > bounds.origin.x + bounds.size.width - self.padding_horizontal {
-            -(cursor_x - bounds.size.width + self.padding_horizontal)
+            -(cursor_pos.x - bounds.size.width + self.padding_horizontal)
         } else {
             self.offset.x
         };
 
         // adjust padding when bounds are smaller
-        let (p_top, p_bottom) = if bounds.size.height
-            < self.padding_top * lines.line_height + self.padding_bottom * lines.line_height
+        let padding_vertical = if bounds.size.height
+            < self.padding_vertical * lines.line_height + self.padding_vertical * lines.line_height
         {
-            (px(0.), px(1.))
+            px(1.)
         } else {
-            (self.padding_top, self.padding_bottom)
+            self.padding_vertical
         };
 
-        let cursor_y = lines.height_till_line_idx(line_idx) + lines.line_height;
-        let margin_top = bounds.origin.y + lines.line_height * p_top;
-        let margin_bottom = bounds.origin.y + bounds.size.height - lines.line_height * p_bottom;
+        // let cursor_y = lines.height_till_line_idx(line_idx) + cursor_pos.y;
+        let cursor_y = bounds.origin.y + cursor_pos.y + px(lines.line_height / px(2.));
+
+        let margin_top = bounds.origin.y + lines.line_height * padding_vertical;
+        let margin_bottom =
+            bounds.origin.y + bounds.size.height - lines.line_height * padding_vertical;
         let lower_bound = self.offset.y.abs() + margin_top;
         let upper_bound = self.offset.y.abs() + margin_bottom;
 
@@ -130,7 +133,7 @@ impl ScrollManager {
         self.offset.x = px(0.).min(upper_bound_x.max(self.offset.x + d.x));
 
         let upper_bound_y =
-            -(lines.height() - bounds.size.height + lines.line_height * self.padding_bottom);
+            -(lines.height() - bounds.size.height + lines.line_height * self.padding_vertical);
         self.offset.y = px(0.).min(upper_bound_y.max(self.offset.y + d.y));
 
         self.show(self.show_epoch, cx);

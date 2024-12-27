@@ -491,10 +491,9 @@ impl TextInput {
             let line_idx = self.content.char_to_line(offset);
             let char_idx = self.content.line_to_byte(line_idx);
             let cursor_idx = self.content.char_to_byte(offset);
-            let cursor_pos = lines.position_for_byte_idx_in_line(cursor_idx - char_idx, line_idx);
 
             self.scroll_manager.update(cx, |this, cx| {
-                this.calc_offset_after_move(line_idx, cursor_pos.x, lines, bounds, cx)
+                this.calc_offset_after_move(line_idx, cursor_idx - char_idx, lines, bounds, cx)
             });
         }
     }
