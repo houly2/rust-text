@@ -137,9 +137,10 @@ impl Element for TextElement {
         let scroll_bar: Option<SmallVec<[PaintQuad; 2]>>;
 
         let line_idx = display_text.char_to_line(cursor);
-        let char_idx = display_text.line_to_byte(line_idx);
-        let cursor_idx = display_text.char_to_byte(cursor);
-        let cursor_pos = lines.position_for_index_in_line(cursor_idx - char_idx, line_idx);
+        let line_byte_idx = display_text.line_to_byte(line_idx);
+        let cursor_byte_idx = display_text.char_to_byte(cursor);
+        let cursor_pos =
+            lines.position_for_byte_idx_in_line(cursor_byte_idx - line_byte_idx, line_idx);
 
         let scroll_manager = input.scroll_manager.read(cx);
         scroll_bar = scroll_manager.paint_bar(&bounds, lines.height(), cursor_pos);
@@ -163,40 +164,44 @@ impl Element for TextElement {
         if selected_range.is_empty() {
             selections = None;
         } else {
-            let start = display_text.char_to_byte(selected_range.start);
-            let start_line_idx = display_text.byte_to_line(start);
-            let start_char_idx = display_text.line_to_byte(start_line_idx);
+            let start_byte_idx = display_text.char_to_byte(selected_range.start);
+            let start_line_idx = display_text.byte_to_line(start_byte_idx);
+            let start_line_byte_idx = display_text.line_to_byte(start_line_idx);
+            let start_byte_idx_in_line = start_byte_idx - start_line_byte_idx;
             let start_point =
-                lines.position_for_index_in_line(start - start_char_idx, start_line_idx);
+                lines.position_for_byte_idx_in_line(start_byte_idx_in_line, start_line_idx);
 
-            let end = display_text.char_to_byte(selected_range.end);
-            let end_line_idx = display_text.byte_to_line(end);
-            let end_char_idx = display_text.line_to_byte(end_line_idx);
-            let end_point = lines.position_for_index_in_line(end - end_char_idx, end_line_idx);
+            let end_byte_idx = display_text.char_to_byte(selected_range.end);
+            let end_line_idx = display_text.byte_to_line(end_byte_idx);
+            let end_line_byte_idx = display_text.line_to_byte(end_line_idx);
+            let end_point =
+                lines.position_for_byte_idx_in_line(end_byte_idx - end_line_byte_idx, end_line_idx);
 
             selections = {
                 let selection_color = rgba(0x7f849c64);
-                let line_count: u32 =
+                let visual_line_count: u32 =
                     ((end_point.y - start_point.y) / lines.line_height).round() as u32;
                 let mut selection_quads = Vec::new();
 
-                match line_count {
+                match visual_line_count {
                     0 => {
                         // Single-line selection
-                        let bounds = self.get_line_selection_bounds(
-                            &new_bounds,
-                            start_point,
-                            end_point,
-                            line_height,
-                        );
-                        selection_quads.push(fill(bounds, selection_color));
+                        selection_quads.push(fill(
+                            self.get_line_selection_bounds(
+                                &new_bounds,
+                                start_point,
+                                end_point,
+                                line_height,
+                            ),
+                            selection_color,
+                        ));
                     }
                     1 => {
                         // Two-line selection
-                        let start_line = lines.line(start_line_idx).unwrap();
-                        let first_line_end =
-                            point(start_line.size(lines.line_height).width, start_point.y);
                         let second_line_start = point(px(0.), end_point.y);
+                        let first_line_end = lines
+                            .wrapped_line_end_point(start_line_idx, start_byte_idx_in_line)
+                            .unwrap();
 
                         selection_quads.push(fill(
                             self.get_line_selection_bounds(
@@ -219,42 +224,68 @@ impl Element for TextElement {
                     }
                     _ => {
                         // Multi-line selection
-                        let start_line = lines.line(start_line_idx).unwrap();
 
-                        // First line
-                        let first_line_end =
-                            point(start_line.size(lines.line_height).width, start_point.y);
-                        selection_quads.push(fill(
-                            self.get_line_selection_bounds(
-                                &new_bounds,
-                                start_point,
-                                first_line_end,
-                                line_height,
-                            ),
-                            selection_color,
-                        ));
+                        let mut first = true;
 
-                        // Middle lines
-                        for n in 1..line_count {
-                            let line = lines.line(start_line_idx + n as usize).unwrap();
-                            let line_y = start_point.y + px(n as f32) * lines.line_height;
-                            let line_bounds = self.get_line_selection_bounds(
-                                &new_bounds,
-                                point(px(0.), line_y),
-                                point(line.size(lines.line_height).width, line_y),
-                                line_height,
-                            );
-                            selection_quads.push(fill(line_bounds, selection_color));
+                        for line_idx in start_line_idx..=end_line_idx {
+                            let line = lines.line(line_idx).unwrap();
+                            let height = lines.height_till_line_idx(line_idx);
+                            let start_byte_idx_in_line = if first {
+                                start_byte_idx - start_line_byte_idx
+                            } else {
+                                0
+                            };
+                            let end_byte_idx_in_line =
+                                end_byte_idx - display_text.line_to_byte(line_idx);
+
+                            let wrapped_lines_end_idx = line
+                                .wrap_boundaries()
+                                .iter()
+                                .map(|wb| {
+                                    let run = &line.unwrapped_layout.runs[wb.run_ix];
+                                    let glyph = &run.glyphs[wb.glyph_ix];
+                                    glyph.index
+                                })
+                                .filter(|byte_idx| {
+                                    start_byte_idx_in_line < *byte_idx
+                                        && end_byte_idx_in_line > *byte_idx
+                                });
+
+                            let mut last_end_idx = 0;
+                            for end_idx in wrapped_lines_end_idx {
+                                let p =
+                                    line.position_for_index(end_idx, lines.line_height).unwrap();
+                                let pp = point(p.x, p.y + height);
+                                selection_quads.push(fill(
+                                    self.get_line_selection_bounds(
+                                        &new_bounds,
+                                        point(if first { start_point.x } else { px(0.) }, pp.y),
+                                        pp,
+                                        line_height,
+                                    ),
+                                    selection_color,
+                                ));
+                                first = false;
+                                last_end_idx = end_idx;
+                            }
+
+                            if last_end_idx < end_byte_idx_in_line {
+                                let end_idx = end_byte_idx_in_line.min(line.len());
+                                let p =
+                                    line.position_for_index(end_idx, lines.line_height).unwrap();
+                                let pp = point(p.x, p.y + height);
+
+                                selection_quads.push(fill(
+                                    self.get_line_selection_bounds(
+                                        &new_bounds,
+                                        point(px(0.), pp.y),
+                                        pp,
+                                        line_height,
+                                    ),
+                                    selection_color,
+                                ));
+                            }
                         }
-
-                        // Last line
-                        let last_line_bounds = self.get_line_selection_bounds(
-                            &new_bounds,
-                            point(px(0.), end_point.y),
-                            end_point,
-                            line_height,
-                        );
-                        selection_quads.push(fill(last_line_bounds, selection_color));
                     }
                 }
                 Some(selection_quads)

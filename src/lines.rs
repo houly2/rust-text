@@ -11,10 +11,11 @@ impl Lines {
         Self { lines, line_height }
     }
 
-    pub fn position_for_index_in_line(&self, index: usize, line_number: usize) -> Point<Pixels> {
-        let previous_heights = self.height_till_line_idx(line_number);
-        let line = self.lines.get(line_number).unwrap();
-        let position_in_line = line.position_for_index(index, self.line_height).unwrap();
+    pub fn position_for_byte_idx_in_line(&self, byte_idx: usize, line_idx: usize) -> Point<Pixels> {
+        let previous_heights = self.height_till_line_idx(line_idx);
+        let line = self.lines.get(line_idx).unwrap();
+        let position_in_line = line.position_for_index(byte_idx, self.line_height).unwrap();
+
         point(position_in_line.x, position_in_line.y + previous_heights)
     }
 
@@ -63,6 +64,25 @@ impl Lines {
         None
     }
 
+    pub fn wrapped_line_end_point(
+        &self,
+        line_idx: usize,
+        byte_idx_in_line: usize,
+    ) -> Option<Point<Pixels>> {
+        let line = self.lines.get(line_idx)?;
+        let a = line
+            .wrap_boundaries()
+            .iter()
+            .map(|wb| {
+                let run = &line.unwrapped_layout.runs[wb.run_ix];
+                let glyph = &run.glyphs[wb.glyph_ix];
+                glyph.index
+            })
+            .find(|byte_idx| byte_idx_in_line < *byte_idx)?;
+
+        line.position_for_index(a, self.line_height)
+    }
+
     pub fn height(&self) -> Pixels {
         self.lines.iter().fold(px(0.), |height, line| {
             height + line.size(self.line_height).height
@@ -70,9 +90,9 @@ impl Lines {
     }
 
     pub fn width(&self) -> Pixels {
-        self.lines.iter().fold(px(0.), |max_width, line| {
-            max_width.max(line.size(self.line_height).width)
-        })
+        self.lines
+            .iter()
+            .fold(px(0.), |max_width, line| max_width.max(line.width()))
     }
 
     pub fn line(&self, line_number: usize) -> Option<&WrappedLine> {
