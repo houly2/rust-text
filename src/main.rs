@@ -138,14 +138,17 @@ fn main() {
                 },
                 |cx| {
                     let text_input = cx.new_view(|cx| {
-                        // TextInput::new(cx)
                         let mut element = TextInput::new(cx);
-                        // element.insert("Ä\nBBB BB BBBBB\nCCC".into(), cx);
-                        // element.insert("Ä\nBΩB BB BBBBB\nCCC".into(), cx);
-                        // element.insert("This is just ä Test! Ω≈ Haha.\nOtherwise i need to input this text all the time myself.\nAnd some more.".into(), cx);
 
-                        element
-                            .read_file(PathBuf::from("/Users/philipwagner/Downloads/test.txt"), cx);
+                        #[cfg(debug_assertions)]
+                        {
+                            // element.insert("Ä\nBΩB BB BBBBB\nCCC".into(), cx);
+                            // element.insert("This is just ä Test! Ω≈ Haha.\nOtherwise i need to input this text all the time myself.\nAnd some more.".into(), cx);
+                            element.read_file(
+                                std::path::PathBuf::from("/Users/philipwagner/Downloads/test.txt"),
+                                cx,
+                            );
+                        }
 
                         return element;
                     });
