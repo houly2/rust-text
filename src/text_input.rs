@@ -505,11 +505,15 @@ impl TextInput {
     fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
         self.blink_manager.update(cx, BlinkManager::pause);
-        self.update_scroll_manager(offset, cx);
+
+        let epoch = self
+            .scroll_manager
+            .update(cx, |this, _| this.next_calc_epoch());
+        self.update_scroll_manager(epoch, offset, cx);
         cx.notify();
     }
 
-    fn update_scroll_manager(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
+    fn update_scroll_manager(&mut self, epoch: usize, offset: usize, cx: &mut ViewContext<Self>) {
         if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         {
             let line_idx = self.content.char_to_line(offset);
@@ -517,7 +521,14 @@ impl TextInput {
             let cursor_idx = self.content.char_to_byte(offset);
 
             self.scroll_manager.update(cx, |this, cx| {
-                this.calc_offset_after_move(line_idx, cursor_idx - byte_idx, lines, bounds, cx)
+                this.calc_offset_after_move(
+                    epoch,
+                    line_idx,
+                    cursor_idx - byte_idx,
+                    lines,
+                    bounds,
+                    cx,
+                )
             });
         }
     }
@@ -542,7 +553,10 @@ impl TextInput {
             self.selected_range = self.selected_range.end..self.selected_range.start;
         }
 
-        self.update_scroll_manager(offset, cx);
+        let epoch = self
+            .scroll_manager
+            .update(cx, |this, _| this.next_calc_epoch());
+        self.update_scroll_manager(epoch, offset, cx);
         cx.notify();
     }
 
@@ -916,7 +930,10 @@ impl ViewInputHandler for TextInput {
 
         let l = text.chars().count();
         self.update_selected_range(range.start + l..range.start + l, cx);
-        self.on_next_paint(move |this, cx| this.update_scroll_manager(range.start + l, cx));
+        let epoch = self
+            .scroll_manager
+            .update(cx, |this, _| this.next_calc_epoch());
+        self.on_next_paint(move |this, cx| this.update_scroll_manager(epoch, range.start + l, cx));
     }
 
     fn replace_and_mark_text_in_range(

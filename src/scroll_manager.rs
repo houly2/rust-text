@@ -9,6 +9,7 @@ pub struct ScrollManager {
     show: bool,
     show_duration: Duration,
     show_epoch: usize,
+    calc_epoch: usize,
     pub width: Pixels,
     pub offset: Point<Pixels>,
     padding_vertical: Pixels,
@@ -21,6 +22,7 @@ impl ScrollManager {
             show: true,
             show_duration: Duration::from_millis(1000),
             show_epoch: 0,
+            calc_epoch: 0,
             width: px(16.),
             offset: point(px(0.), px(0.)),
             padding_vertical: px(2.),
@@ -28,9 +30,14 @@ impl ScrollManager {
         }
     }
 
-    fn next_epoch(&mut self) -> usize {
+    fn next_show_epoch(&mut self) -> usize {
         self.show_epoch += 1;
         self.show_epoch
+    }
+
+    pub fn next_calc_epoch(&mut self) -> usize {
+        self.calc_epoch += 1;
+        self.calc_epoch
     }
 
     fn show(&mut self, epoch: usize, cx: &mut ModelContext<Self>) {
@@ -38,7 +45,7 @@ impl ScrollManager {
             self.show = true;
             cx.notify();
 
-            let epoch = self.next_epoch();
+            let epoch = self.next_show_epoch();
             let duration = self.show_duration;
             cx.spawn(|this, mut cx| async move {
                 Timer::after(duration).await;
@@ -67,12 +74,17 @@ impl ScrollManager {
 
     pub fn calc_offset_after_move(
         &mut self,
+        epoch: usize,
         line_idx: usize,
         cursor_byte_idx: usize,
         lines: &Lines,
         bounds: &Bounds<Pixels>,
         cx: &mut ModelContext<Self>,
     ) {
+        if epoch != self.calc_epoch {
+            return;
+        }
+
         let cursor_pos = lines.position_for_byte_idx_in_line(cursor_byte_idx, line_idx);
 
         let cursor_screen_x = cursor_pos.x + self.offset.x;
