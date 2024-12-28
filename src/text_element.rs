@@ -265,8 +265,8 @@ impl Element for TextElement {
                                     ),
                                     selection_color,
                                 ));
-                                first = false;
                                 last_end_idx = end_idx;
+                                first = false;
                             }
 
                             if last_end_idx < end_byte_idx_in_line {
@@ -274,17 +274,18 @@ impl Element for TextElement {
                                 let p =
                                     line.position_for_index(end_idx, lines.line_height).unwrap();
                                 let pp = point(p.x, p.y + height);
-
                                 selection_quads.push(fill(
                                     self.get_line_selection_bounds(
                                         &new_bounds,
-                                        point(px(0.), pp.y),
+                                        point(if first { start_point.x } else { px(0.) }, pp.y),
                                         pp,
                                         line_height,
                                     ),
                                     selection_color,
                                 ));
                             }
+
+                            first = false;
                         }
                     }
                 }

@@ -78,9 +78,9 @@ impl Lines {
                 let glyph = &run.glyphs[wb.glyph_ix];
                 glyph.index
             })
-            .find(|byte_idx| byte_idx_in_line < *byte_idx)?;
+            .find(|byte_idx| byte_idx_in_line < *byte_idx);
 
-        line.position_for_index(a, self.line_height)
+        line.position_for_index(a.unwrap_or(line.len()), self.line_height)
     }
 
     pub fn height(&self) -> Pixels {
