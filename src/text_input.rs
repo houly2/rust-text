@@ -362,7 +362,7 @@ impl TextInput {
             return 0;
         };
 
-        let offset_position = point(position.x + offset.x, position.y + offset.y.abs());
+        let offset_position = point(position.x - offset.x, position.y + offset.y.abs());
 
         if position.y < bounds.top() {
             return 0;
