@@ -64,13 +64,9 @@ impl Lines {
         None
     }
 
-    pub fn wrapped_line_end_point(
-        &self,
-        line_idx: usize,
-        byte_idx_in_line: usize,
-    ) -> Option<Point<Pixels>> {
+    pub fn wrapped_line_end_idx(&self, line_idx: usize, byte_idx_in_line: usize) -> Option<usize> {
         let line = self.lines.get(line_idx)?;
-        let a = line
+        let end_idx = line
             .wrap_boundaries()
             .iter()
             .map(|wb| {
@@ -79,8 +75,17 @@ impl Lines {
                 glyph.index
             })
             .find(|byte_idx| byte_idx_in_line < *byte_idx);
+        end_idx.or(Some(line.len()))
+    }
 
-        line.position_for_index(a.unwrap_or(line.len()), self.line_height)
+    pub fn wrapped_line_end_point(
+        &self,
+        line_idx: usize,
+        byte_idx_in_line: usize,
+    ) -> Option<Point<Pixels>> {
+        let line = self.lines.get(line_idx)?;
+        let end_idx = self.wrapped_line_end_idx(line_idx, byte_idx_in_line)?;
+        line.position_for_index(end_idx, self.line_height)
     }
 
     pub fn height(&self) -> Pixels {

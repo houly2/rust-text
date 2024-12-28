@@ -535,25 +535,25 @@ impl TextInput {
     }
 
     fn position_for_up(&mut self) -> Option<usize> {
-        if let Some(cursor_pos) = self.position_from_layout(self.cursor_offset()) {
-            if let Some(layout) = &self.last_layout {
-                let y = cursor_pos.y - layout.line_height;
+        if let (Some(cursor_pos), Some(layout)) = (
+            self.position_from_layout(self.cursor_offset()),
+            &self.last_layout,
+        ) {
+            let y = cursor_pos.y - layout.line_height;
 
-                if y < px(0.) {
-                    return None;
-                }
+            if y < px(0.) {
+                return None;
+            }
 
-                let prev_visual_line_pos = point(cursor_pos.x, y);
-                if let Some((line_idx, pos)) = layout.byte_index_for_position(prev_visual_line_pos)
-                {
-                    let line = self.content.line_to_byte(line_idx);
-                    let char = self.content.byte_to_char(line + pos);
-                    return Some(char);
-                } else {
-                    let line_idx = self.content.char_to_line(self.cursor_offset());
-                    let line_start = self.content.line_to_char(line_idx);
-                    return Some(self.previous_boundary(line_start));
-                }
+            let prev_visual_line_pos = point(cursor_pos.x, y);
+            if let Some((line_idx, pos)) = layout.byte_index_for_position(prev_visual_line_pos) {
+                let line = self.content.line_to_byte(line_idx);
+                let char = self.content.byte_to_char(line + pos);
+                return Some(char);
+            } else {
+                let line_idx = self.content.char_to_line(self.cursor_offset());
+                let line_start = self.content.line_to_char(line_idx);
+                return Some(self.previous_boundary(line_start));
             }
         }
 
@@ -561,28 +561,28 @@ impl TextInput {
     }
 
     fn position_for_down(&mut self) -> Option<usize> {
-        if let Some(cursor_pos) = self.position_from_layout(self.cursor_offset()) {
-            if let Some(layout) = &self.last_layout {
-                let next_visual_line_pos = point(cursor_pos.x, cursor_pos.y + layout.line_height);
-                if let Some((line_idx, pos)) = layout.byte_index_for_position(next_visual_line_pos)
-                {
-                    let line = self.content.line_to_byte(line_idx);
-                    return Some(self.content.byte_to_char(line + pos));
-                } else {
-                    // did this line wrap?
-                    let end_of_line = self.position_for_end_of_line(self.cursor_offset());
-                    if let Some(end_pos) = self.position_from_layout(end_of_line) {
-                        if cursor_pos.y < end_pos.y {
-                            return Some(end_of_line);
-                        }
+        if let (Some(cursor_pos), Some(layout)) = (
+            self.position_from_layout(self.cursor_offset()),
+            &self.last_layout,
+        ) {
+            let next_visual_line_pos = point(cursor_pos.x, cursor_pos.y + layout.line_height);
+            if let Some((line_idx, pos)) = layout.byte_index_for_position(next_visual_line_pos) {
+                let line = self.content.line_to_byte(line_idx);
+                return Some(self.content.byte_to_char(line + pos));
+            } else {
+                // did this line wrap?
+                let end_of_line = self.position_for_end_of_line(self.cursor_offset());
+                if let Some(end_pos) = self.position_from_layout(end_of_line) {
+                    if cursor_pos.y < end_pos.y {
+                        return Some(end_of_line);
                     }
+                }
 
-                    // go to end of next line?
-                    let current_line = self.content.char_to_line(self.cursor_offset());
-                    if current_line < self.content.len_lines() {
-                        let start_of_next_line = self.content.line_to_char(current_line + 1);
-                        return Some(self.position_for_end_of_line(start_of_next_line));
-                    }
+                // go to end of next line?
+                let current_line = self.content.char_to_line(self.cursor_offset());
+                if current_line < self.content.len_lines() {
+                    let start_of_next_line = self.content.line_to_char(current_line + 1);
+                    return Some(self.position_for_end_of_line(start_of_next_line));
                 }
             }
         }
@@ -591,13 +591,14 @@ impl TextInput {
     }
 
     fn position_for_start_of_line(&mut self) -> usize {
-        if let Some(cursor_pos) = self.position_from_layout(self.cursor_offset()) {
-            if let Some(layout) = &self.last_layout {
-                let start_of_line_pos = point(px(0.), cursor_pos.y);
-                if let Some((line_idx, pos)) = layout.byte_index_for_position(start_of_line_pos) {
-                    let line = self.content.line_to_byte(line_idx);
-                    return self.content.byte_to_char(line + pos);
-                }
+        if let (Some(cursor_pos), Some(layout)) = (
+            self.position_from_layout(self.cursor_offset()),
+            &self.last_layout,
+        ) {
+            let start_of_line_pos = point(px(0.), cursor_pos.y);
+            if let Some((line_idx, pos)) = layout.byte_index_for_position(start_of_line_pos) {
+                let line = self.content.line_to_byte(line_idx);
+                return self.content.byte_to_char(line + pos);
             }
         }
 
@@ -606,19 +607,20 @@ impl TextInput {
     }
 
     fn position_for_end_of_line(&self, position: usize) -> usize {
-        // todo: handle wrapping
-        let current_line_idx = self.content.char_to_line(position);
-        let start_of_line_idx = self.content.line_to_char(current_line_idx);
-        let current_line = self.content.line(current_line_idx);
-        let last_line_idx = self.content.len_lines() - 1;
+        if let Some(layout) = &self.last_layout {
+            let line_idx = self.content.char_to_line(self.cursor_offset());
+            let line_byte_idx = self.content.line_to_byte(line_idx);
+            let pos_byte_idx_in_line = self.content.char_to_byte(position) - line_byte_idx;
 
-        let offset = if current_line_idx == last_line_idx {
-            0
-        } else {
-            1
-        };
+            if let Some(end_byte_idx) = layout.wrapped_line_end_idx(line_idx, pos_byte_idx_in_line)
+            {
+                return self.content.byte_to_char(line_byte_idx + end_byte_idx);
+            }
+        }
 
-        start_of_line_idx + current_line.len_chars() - offset
+        let line_idx = self.content.char_to_line(position);
+        let line_char_idx = self.content.line_to_char(line_idx);
+        line_char_idx + self.content.line(line_idx).len_chars()
     }
 
     fn start_of_word(&self, offset: usize) -> usize {
