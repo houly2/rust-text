@@ -611,7 +611,7 @@ impl TextInput {
 
     fn position_for_end_of_line(&self, position: usize) -> usize {
         if let Some(layout) = &self.last_layout {
-            let line_idx = self.content.char_to_line(self.cursor_offset());
+            let line_idx = self.content.char_to_line(position);
             let line_byte_idx = self.content.line_to_byte(line_idx);
             let pos_byte_idx_in_line = self.content.char_to_byte(position) - line_byte_idx;
 
