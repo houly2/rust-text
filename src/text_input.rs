@@ -70,6 +70,8 @@ pub struct TextInput {
     undo_stack: Vec<Box<dyn Command>>,
     redo_stack: Vec<Box<dyn Command>>,
 
+    settings_soft_wrap: bool,
+
     _subscriptions: Vec<Subscription>,
 }
 
@@ -93,6 +95,7 @@ impl TextInput {
             scroll_manager: scroll_manager.clone(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
+            settings_soft_wrap: false,
             _subscriptions: vec![
                 cx.observe(&scroll_manager, |_, _, cx| cx.notify()),
                 cx.observe(&blink_manager, |_, _, cx| cx.notify()),
@@ -716,6 +719,15 @@ impl TextInput {
     fn close_window(&mut self, _: &WindowClose, cx: &mut ViewContext<Self>) {
         cx.remove_window();
     }
+
+    fn toggle_soft_wrap(&mut self, _: &ClickEvent, cx: &mut ViewContext<Self>) {
+        self.settings_soft_wrap = !self.settings_soft_wrap;
+        cx.notify();
+    }
+
+    pub fn soft_wrap_enabled(&self) -> bool {
+        self.settings_soft_wrap
+    }
 }
 
 impl Render for TextInput {
@@ -790,8 +802,23 @@ impl Render for TextInput {
                     .px(px(8.))
                     .pt(px(2.))
                     .pb(px(4.))
-                    // .bg(black())
                     .text_size(px(14.))
+                    .child(
+                        div()
+                            .px(px(4.))
+                            .id("soft_wrap")
+                            .on_click(cx.listener(Self::toggle_soft_wrap))
+                            .child(format!(
+                                "{} Wrap",
+                                if self.settings_soft_wrap {
+                                    "◉"
+                                } else {
+                                    "○"
+                                }
+                            ))
+                            .cursor(CursorStyle::PointingHand)
+                            .hover(|style| style.rounded(px(6.)).bg(rgb(0x000000))),
+                    )
                     .child(div().flex_grow())
                     .child(self.status_bar_selection_format()),
             )

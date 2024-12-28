@@ -126,7 +126,16 @@ impl Element for TextElement {
 
         let lines_raw = cx
             .text_system()
-            .shape_text(text.clone(), font_size, &runs, None)
+            .shape_text(
+                text.clone(),
+                font_size,
+                &runs,
+                if input.soft_wrap_enabled() {
+                    Some(new_bounds.size.width)
+                } else {
+                    None
+                },
+            )
             .unwrap();
 
         let line_height = cx.line_height();
