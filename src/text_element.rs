@@ -372,10 +372,12 @@ impl Element for TextElement {
 
         cx.set_cursor_style(CursorStyle::Arrow, &prepaint.scroll_bar_hitbox);
 
-        self.input.update(cx, |input, _cx| {
+        self.input.update(cx, |input, cx| {
             input.last_layout = Some(lines);
             input.last_bounds = Some(prepaint.bounds);
             input.last_offset = Some(prepaint.offset);
+
+            input.notify_about_paint(cx);
         });
     }
 }

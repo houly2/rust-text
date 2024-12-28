@@ -4,9 +4,11 @@ use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement
 
 use gpui::*;
 use ropey::*;
+use std::cell::RefCell;
 use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
+use std::rc::Rc;
 use unicode_segmentation::*;
 
 actions!(set_menus, [Open, About]);
@@ -52,6 +54,8 @@ actions!(
     ]
 );
 
+type PaintCallback = Box<dyn FnOnce(&mut TextInput, &mut ViewContext<TextInput>)>;
+
 pub struct TextInput {
     pub focus_handle: FocusHandle,
     pub content: Rope,
@@ -69,6 +73,8 @@ pub struct TextInput {
 
     undo_stack: Vec<Box<dyn Command>>,
     redo_stack: Vec<Box<dyn Command>>,
+
+    on_next_paint_stack: Rc<RefCell<Vec<PaintCallback>>>,
 
     settings_soft_wrap: bool,
 
@@ -95,6 +101,7 @@ impl TextInput {
             scroll_manager: scroll_manager.clone(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
+            on_next_paint_stack: Default::default(),
             settings_soft_wrap: false,
             _subscriptions: vec![
                 cx.observe(&scroll_manager, |_, _, cx| cx.notify()),
@@ -116,6 +123,20 @@ impl TextInput {
                 }),
             ],
         }
+    }
+
+    pub fn notify_about_paint(&mut self, cx: &mut ViewContext<Self>) {
+        let next_paint_callbacks = self.on_next_paint_stack.take();
+        for callback in next_paint_callbacks {
+            callback(self, cx);
+        }
+    }
+
+    fn on_next_paint(
+        &mut self,
+        on_notify: impl FnOnce(&mut Self, &mut ViewContext<Self>) + 'static,
+    ) {
+        RefCell::borrow_mut(&self.on_next_paint_stack).push(Box::new(on_notify));
     }
 
     fn about(&mut self, _: &About, cx: &mut ViewContext<Self>) {
@@ -492,11 +513,11 @@ impl TextInput {
         if let (Some(bounds), Some(lines)) = (self.last_bounds.as_ref(), self.last_layout.as_ref())
         {
             let line_idx = self.content.char_to_line(offset);
-            let char_idx = self.content.line_to_byte(line_idx);
+            let byte_idx = self.content.line_to_byte(line_idx);
             let cursor_idx = self.content.char_to_byte(offset);
 
             self.scroll_manager.update(cx, |this, cx| {
-                this.calc_offset_after_move(line_idx, cursor_idx - char_idx, lines, bounds, cx)
+                this.calc_offset_after_move(line_idx, cursor_idx - byte_idx, lines, bounds, cx)
             });
         }
     }
@@ -895,6 +916,7 @@ impl ViewInputHandler for TextInput {
 
         let l = text.chars().count();
         self.update_selected_range(range.start + l..range.start + l, cx);
+        self.on_next_paint(move |this, cx| this.update_scroll_manager(range.start + l, cx));
     }
 
     fn replace_and_mark_text_in_range(
@@ -931,18 +953,5 @@ impl ViewInputHandler for TextInput {
         println!("bounds_for_range");
 
         None
-        // let last_layout = self.last_layout.as_ref()?;
-        // let range = self.range_from_utf16(&range_utf16);
-
-        // Some(Bounds::from_corners(
-        //     point(
-        //         bounds.left() + last_layout.x_for_index(range.start),
-        //         bounds.top(),
-        //     ),
-        //     point(
-        //         bounds.left() + last_layout.x_for_index(range.end),
-        //         bounds.bottom(),
-        //     ),
-        // ))
     }
 }

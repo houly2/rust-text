@@ -68,12 +68,12 @@ impl ScrollManager {
     pub fn calc_offset_after_move(
         &mut self,
         line_idx: usize,
-        cursor_idx: usize,
+        cursor_byte_idx: usize,
         lines: &Lines,
         bounds: &Bounds<Pixels>,
         cx: &mut ModelContext<Self>,
     ) {
-        let cursor_pos = lines.position_for_byte_idx_in_line(cursor_idx, line_idx);
+        let cursor_pos = lines.position_for_byte_idx_in_line(cursor_byte_idx, line_idx);
 
         let cursor_screen_x = cursor_pos.x + self.offset.x;
 
