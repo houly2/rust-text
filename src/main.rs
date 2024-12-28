@@ -189,9 +189,21 @@ fn main() {
             Menu {
                 name: "Edit".into(),
                 items: vec![
-                    MenuItem::action("Undo", Undo),
-                    MenuItem::action("Redo", Redo),
+                    MenuItem::os_action("Undo", Undo, OsAction::Undo),
+                    MenuItem::os_action("Redo", Redo, OsAction::Redo),
+                    MenuItem::separator(),
+                    MenuItem::os_action("Cut", Cut, OsAction::Cut),
+                    MenuItem::os_action("Copy", Copy, OsAction::Copy),
+                    MenuItem::os_action("Paste", Paste, OsAction::Paste),
                 ],
+            },
+            Menu {
+                name: "Selection".into(),
+                items: vec![MenuItem::os_action(
+                    "Select All",
+                    SelectAll,
+                    OsAction::SelectAll,
+                )],
             },
             Menu {
                 name: "Window".into(),
