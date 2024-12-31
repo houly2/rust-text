@@ -112,10 +112,12 @@ fn main() {
             KeyBinding::new("shift-cmd-down", SelectDocEnd, None),
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-o", Open, None),
+            KeyBinding::new("cmd-s", Save, None),
+            KeyBinding::new("shift-cmd-s", SaveAs, None),
             KeyBinding::new("cmd-h", Hide, None),
             KeyBinding::new("cmd-z", Undo, None),
             KeyBinding::new("cmd-n", FileNew, None),
-            KeyBinding::new("cmd-shift-z", Redo, None),
+            KeyBinding::new("shift-cmd-z", Redo, None),
             KeyBinding::new("cmd-w", WindowClose, None),
             KeyBinding::new("cmd-m", Minimize, None),
         ]);
@@ -145,7 +147,7 @@ fn main() {
                             // element.insert("Ä\nBΩB BB BBBBB\nCCC".into(), cx);
                             // element.insert("This is just ä Test! Ω≈ Haha.\nOtherwise i need to input this text all the time myself.\nAnd some more.".into(), cx);
                             element.read_file(
-                                std::path::PathBuf::from("/Users/philipwagner/Downloads/test.txt"),
+                                &std::path::PathBuf::from("/Users/philipwagner/Downloads/test.txt"),
                                 cx,
                             );
                         }
@@ -187,6 +189,9 @@ fn main() {
                     MenuItem::action("New", FileNew),
                     MenuItem::separator(),
                     MenuItem::action("Open", Open),
+                    MenuItem::separator(),
+                    MenuItem::action("Save", Save),
+                    MenuItem::action("Save As", SaveAs),
                 ],
             },
             Menu {

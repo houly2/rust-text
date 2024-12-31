@@ -7,11 +7,11 @@ use ropey::*;
 use std::cell::RefCell;
 use std::fs;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use unicode_segmentation::*;
 
-actions!(set_menus, [Open, About]);
+actions!(set_menus, [Open, Save, SaveAs, About]);
 
 actions!(
     text_input,
@@ -76,6 +76,7 @@ pub struct TextInput {
 
     on_next_paint_stack: Rc<RefCell<Vec<PaintCallback>>>,
 
+    current_file_path: Option<PathBuf>,
     settings_soft_wrap: bool,
 
     _subscriptions: Vec<Subscription>,
@@ -102,6 +103,7 @@ impl TextInput {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             on_next_paint_stack: Default::default(),
+            current_file_path: None,
             settings_soft_wrap: false,
             _subscriptions: vec![
                 cx.observe(&scroll_manager, |_, _, cx| cx.notify()),
@@ -175,44 +177,124 @@ impl TextInput {
         self.replace_text_in_range(None, &text, cx);
     }
 
-    fn open(&mut self, _: &Open, cx: &mut ViewContext<Self>) {
+    fn prompt_for_path(
+        &self,
+        callback: impl FnOnce(WeakView<Self>, Option<&PathBuf>, AsyncWindowContext) + 'static,
+        cx: &mut ViewContext<Self>,
+    ) {
         let paths = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
             multiple: false,
         });
 
-        cx.spawn(|this, mut cx| async move {
+        cx.spawn(|weak_view, cx| async move {
             match Flatten::flatten(paths.await.map_err(|e| e.into())) {
                 Ok(Some(paths)) => {
-                    cx.update(|cx| {
-                        // cx.add_recent_document(path);
-                        // todo: handle multiple files
-                        if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| {
-                                for path in paths {
-                                    this.read_file(path, cx);
-                                    break;
-                                }
-                            });
-                        }
-                    })
-                    .ok();
+                    if let Some(path) = paths.first() {
+                        callback(weak_view, Some(path), cx)
+                    } else {
+                        callback(weak_view, None, cx)
+                    }
                 }
-                Ok(None) => {}
-                Err(err) => {
-                    println!("open file error: {}", err)
-                }
+                Ok(None) => callback(weak_view, None, cx),
+                Err(_) => callback(weak_view, None, cx),
             }
         })
         .detach();
     }
 
-    pub fn read_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
+    fn prompt_for_new_path(
+        &self,
+        callback: impl FnOnce(WeakView<Self>, Option<&PathBuf>, AsyncWindowContext) + 'static,
+        cx: &mut ViewContext<Self>,
+    ) {
+        let path = cx.prompt_for_new_path(Path::new("").into());
+
+        cx.spawn(|weak_view, cx| async move {
+            match Flatten::flatten(path.await.map_err(|e| e.into())) {
+                Ok(Some(path)) => callback(weak_view, Some(&path), cx),
+                Ok(None) => callback(weak_view, None, cx),
+                Err(_) => callback(weak_view, None, cx),
+            }
+        })
+        .detach();
+    }
+
+    fn set_file_path(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
+        self.current_file_path = Some(path);
+        cx.notify();
+    }
+
+    fn save(&mut self, _: &Save, cx: &mut ViewContext<Self>) {
+        if let Some(path) = &self.current_file_path {
+            self.save_file(path.into(), cx);
+        } else {
+            self.save_as(cx);
+        }
+    }
+
+    fn save_as_handler(&mut self, _: &SaveAs, cx: &mut ViewContext<Self>) {
+        self.save_as(cx);
+    }
+
+    fn save_as(&mut self, cx: &mut ViewContext<Self>) {
+        self.prompt_for_new_path(
+            |this, path, mut cx| {
+                if let Some(path) = path {
+                    cx.update(|cx| {
+                        if let Some(this) = this.upgrade() {
+                            this.update(cx, |this, cx| {
+                                this.set_file_path(path.into(), cx);
+                                this.save_file(path.into(), cx);
+                            });
+                        }
+                    })
+                    .ok();
+                } else {
+                    // todo: handle
+                }
+            },
+            cx,
+        );
+    }
+
+    fn open(&mut self, _: &Open, cx: &mut ViewContext<Self>) {
+        self.prompt_for_path(
+            |this, path, mut cx| {
+                if let Some(path) = path {
+                    cx.update(|cx| {
+                        cx.add_recent_document(path);
+                        if let Some(this) = this.upgrade() {
+                            this.update(cx, |this, cx| {
+                                this.read_file(path, cx);
+                            });
+                        }
+                    })
+                    .ok();
+                } else {
+                    // todo: handle
+                }
+            },
+            cx,
+        );
+    }
+
+    pub fn read_file(&mut self, path: &PathBuf, cx: &mut ViewContext<Self>) {
         if let Ok(new_content) = fs::read_to_string(path) {
+            self.set_file_path(path.into(), cx);
             self.insert(new_content.into(), cx);
             self.move_to(0, cx);
         }
+    }
+
+    fn save_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
+        match fs::write(path, self.content.to_string()) {
+            Ok(_) => println!("file written"),
+            Err(error) => println!("{:?}", error),
+        }
+
+        cx.notify();
     }
 
     fn new_line(&mut self, _: &NewLine, cx: &mut ViewContext<Self>) {
@@ -820,6 +902,8 @@ impl Render for TextInput {
                     .on_action(cx.listener(Self::undo))
                     .on_action(cx.listener(Self::redo))
                     .on_action(cx.listener(Self::open))
+                    .on_action(cx.listener(Self::save))
+                    .on_action(cx.listener(Self::save_as_handler))
                     .on_action(cx.listener(Self::minimize))
                     .on_action(cx.listener(Self::close_window))
                     .on_action(cx.listener(Self::about))
