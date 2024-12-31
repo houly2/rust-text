@@ -71,7 +71,6 @@ impl Render for InputExample {
             .flex()
             .flex_col()
             .size_full()
-            .child(div().h(px(32.)).flex_none())
             .child(self.text_input.clone())
     }
 }

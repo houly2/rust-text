@@ -77,6 +77,8 @@ pub struct TextInput {
     on_next_paint_stack: Rc<RefCell<Vec<PaintCallback>>>,
 
     current_file_path: Option<PathBuf>,
+    is_dirty: bool,
+
     settings_soft_wrap: bool,
 
     _subscriptions: Vec<Subscription>,
@@ -103,6 +105,7 @@ impl TextInput {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             on_next_paint_stack: Default::default(),
+            is_dirty: false,
             current_file_path: None,
             settings_soft_wrap: false,
             _subscriptions: vec![
@@ -154,6 +157,7 @@ impl TextInput {
         command.execute(&mut self.content);
         self.undo_stack.push(command);
         self.redo_stack.clear();
+        self.is_dirty = true;
         cx.notify();
     }
 
@@ -284,13 +288,14 @@ impl TextInput {
         if let Ok(new_content) = fs::read_to_string(path) {
             self.set_file_path(path.into(), cx);
             self.insert(new_content.into(), cx);
+            self.is_dirty = false;
             self.move_to(0, cx);
         }
     }
 
     fn save_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
         match fs::write(path, self.content.to_string()) {
-            Ok(_) => println!("file written"),
+            Ok(_) => self.is_dirty = false,
             Err(error) => println!("{:?}", error),
         }
 
@@ -845,6 +850,18 @@ impl TextInput {
     pub fn soft_wrap_enabled(&self) -> bool {
         self.settings_soft_wrap
     }
+
+    fn file_name(&self) -> &str {
+        if let Some(path) = &self.current_file_path {
+            if let Some(file_name) = path.file_name() {
+                if let Some(file_name) = file_name.to_str() {
+                    return file_name;
+                }
+            }
+        }
+
+        ""
+    }
 }
 
 impl Render for TextInput {
@@ -856,6 +873,21 @@ impl Render for TextInput {
             .w_full()
             .text_color(rgb(0xcdd6f4))
             .font_family("Iosevka")
+            .child(
+                div().h(px(32.)).flex_none().child(
+                    div()
+                        .flex()
+                        .h_full()
+                        .w_full()
+                        .justify_center()
+                        .items_center()
+                        .child(format!(
+                            "{}{}",
+                            if self.is_dirty { "🞄" } else { "" },
+                            self.file_name()
+                        )),
+                ),
+            )
             .child(
                 div()
                     .flex()
