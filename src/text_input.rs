@@ -89,7 +89,7 @@ impl TextInput {
         let blink_manager = cx.new_model(|_| BlinkManager::new());
         let scroll_manager = cx.new_model(|_| ScrollManager::new());
 
-        Self {
+        let this = Self {
             focus_handle: cx.focus_handle(),
             content: "".into(),
             selected_range: 0..0,
@@ -127,7 +127,16 @@ impl TextInput {
                     });
                 }),
             ],
-        }
+        };
+
+        let handle = cx.view().downgrade();
+        cx.on_window_should_close(move |cx| {
+            handle
+                .update(cx, |this, cx| this.allowed_to_close_window(cx))
+                .unwrap_or(true)
+        });
+
+        return this;
     }
 
     pub fn notify_about_paint(&mut self, cx: &mut ViewContext<Self>) {
@@ -230,7 +239,11 @@ impl TextInput {
         cx.notify();
     }
 
-    fn save(&mut self, _: &Save, cx: &mut ViewContext<Self>) {
+    fn save_handler(&mut self, _: &Save, cx: &mut ViewContext<Self>) {
+        self.save(cx);
+    }
+
+    fn save(&mut self, cx: &mut ViewContext<Self>) {
         if let Some(path) = &self.current_file_path {
             self.save_file(path.into(), cx);
         } else {
@@ -839,7 +852,36 @@ impl TextInput {
     }
 
     fn close_window(&mut self, _: &WindowClose, cx: &mut ViewContext<Self>) {
-        cx.remove_window();
+        if self.allowed_to_close_window(cx) {
+            cx.remove_window();
+        }
+    }
+
+    fn allowed_to_close_window(&self, cx: &mut ViewContext<Self>) -> bool {
+        if !self.is_dirty {
+            true
+        } else {
+            let message = "Close without saving?";
+            let detail = "Data will be lost";
+            let prompt = cx.prompt(
+                PromptLevel::Info,
+                &message,
+                Some(&detail),
+                &["Save", "Don't Save", "Abort"],
+            );
+            cx.spawn(|this, mut cx| async move {
+                match prompt.await.ok() {
+                    Some(0) => this.update(&mut cx, |this, cx| {
+                        this.save(cx);
+                        cx.remove_window();
+                    }),
+                    Some(1) => this.update(&mut cx, |_, cx| cx.remove_window()),
+                    Some(2) | Some(3_usize..) | None => Ok({}),
+                }
+            })
+            .detach();
+            false
+        }
     }
 
     fn toggle_soft_wrap(&mut self, _: &ClickEvent, cx: &mut ViewContext<Self>) {
@@ -934,7 +976,7 @@ impl Render for TextInput {
                     .on_action(cx.listener(Self::undo))
                     .on_action(cx.listener(Self::redo))
                     .on_action(cx.listener(Self::open))
-                    .on_action(cx.listener(Self::save))
+                    .on_action(cx.listener(Self::save_handler))
                     .on_action(cx.listener(Self::save_as_handler))
                     .on_action(cx.listener(Self::minimize))
                     .on_action(cx.listener(Self::close_window))
