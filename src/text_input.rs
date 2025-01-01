@@ -1,5 +1,6 @@
 use crate::command::{Command, DeleteCommand, InsertCommand};
 use crate::scroll_manager::ScrollManager;
+use crate::status_bar::StatusBar;
 use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
 use gpui::*;
@@ -71,6 +72,8 @@ pub struct TextInput {
     pub blink_manager: Model<BlinkManager>,
     pub scroll_manager: Model<ScrollManager>,
 
+    status_bar: View<StatusBar>,
+
     undo_stack: Vec<Box<dyn Command>>,
     redo_stack: Vec<Box<dyn Command>>,
 
@@ -89,6 +92,9 @@ impl TextInput {
         let blink_manager = cx.new_model(|_| BlinkManager::new());
         let scroll_manager = cx.new_model(|_| ScrollManager::new());
 
+        let weak_handle = cx.view().downgrade();
+        let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
+
         let this = Self {
             focus_handle: cx.focus_handle(),
             content: "".into(),
@@ -102,6 +108,7 @@ impl TextInput {
             is_scroll_dragging: false,
             blink_manager: blink_manager.clone(),
             scroll_manager: scroll_manager.clone(),
+            status_bar,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             on_next_paint_stack: Default::default(),
@@ -819,34 +826,6 @@ impl TextInput {
         cx.notify();
     }
 
-    fn status_bar_selection_format(&self) -> String {
-        let line_idx = self.content.char_to_line(self.cursor_offset());
-        let line_char_idx = self.content.line_to_char(line_idx);
-        let char_idx_in_line = self.cursor_offset() - line_char_idx;
-
-        let selection = if !self.selected_range.is_empty() {
-            let start_line_idx = self.content.char_to_line(self.selected_range.start);
-            let end_line_idx = self.content.char_to_line(self.selected_range.end);
-            let line_count = (start_line_idx as isize - end_line_idx as isize).abs();
-            if line_count > 0 {
-                format!(
-                    " ({} lines, {} chars)",
-                    line_count + 1,
-                    (self.selected_range.start as isize - self.selected_range.end as isize).abs()
-                )
-            } else {
-                format!(
-                    " ({} chars)",
-                    (self.selected_range.start as isize - self.selected_range.end as isize).abs()
-                )
-            }
-        } else {
-            "".to_string()
-        };
-
-        format!("{}:{}{}", line_idx + 1, char_idx_in_line + 1, selection)
-    }
-
     fn minimize(&mut self, _: &Minimize, cx: &mut ViewContext<Self>) {
         cx.minimize_window();
     }
@@ -884,8 +863,8 @@ impl TextInput {
         }
     }
 
-    fn toggle_soft_wrap(&mut self, _: &ClickEvent, cx: &mut ViewContext<Self>) {
-        self.settings_soft_wrap = !self.settings_soft_wrap;
+    pub fn set_soft_wrap(&mut self, enabled: bool, cx: &mut ViewContext<Self>) {
+        self.settings_soft_wrap = enabled;
         cx.notify();
     }
 
@@ -988,33 +967,7 @@ impl Render for TextInput {
                     .on_mouse_move(cx.listener(Self::on_mouse_move))
                     .child(TextElement::new(cx.view().clone())),
             )
-            .child(
-                div()
-                    .flex()
-                    .w_full()
-                    .px(px(8.))
-                    .pt(px(2.))
-                    .pb(px(4.))
-                    .text_size(px(14.))
-                    .child(
-                        div()
-                            .px(px(4.))
-                            .id("soft_wrap")
-                            .on_click(cx.listener(Self::toggle_soft_wrap))
-                            .child(format!(
-                                "{} Wrap",
-                                if self.settings_soft_wrap {
-                                    "◉"
-                                } else {
-                                    "○"
-                                }
-                            ))
-                            .cursor(CursorStyle::PointingHand)
-                            .hover(|style| style.rounded(px(6.)).bg(rgb(0x000000))),
-                    )
-                    .child(div().flex_grow())
-                    .child(self.status_bar_selection_format()),
-            )
+            .child(self.status_bar.clone())
     }
 }
 

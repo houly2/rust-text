@@ -4,6 +4,7 @@ mod blink_manager;
 mod command;
 mod lines;
 mod scroll_manager;
+mod status_bar;
 mod text_element;
 mod text_input;
 
