@@ -2,6 +2,7 @@ use gpui::*;
 
 mod blink_manager;
 mod command;
+mod editor;
 mod lines;
 mod scroll_manager;
 mod status_bar;
@@ -9,6 +10,7 @@ mod text_element;
 mod text_input;
 mod title_bar;
 
+use crate::editor::*;
 use crate::text_input::*;
 
 actions!(set_menus, [Quit, Hide, FileNew]);
@@ -39,8 +41,8 @@ fn file_new(_: &FileNew, cx: &mut AppContext) {
                 ..Default::default()
             },
             |cx| {
-                cx.new_view(|cx| InputExample {
-                    text_input: cx.new_view(|cx| TextInput::new(cx)),
+                cx.new_view(|cx| TextEditor {
+                    editor: cx.new_view(|cx| Editor::new(cx)),
                     focus_handle: cx.focus_handle(),
                 })
             },
@@ -49,76 +51,43 @@ fn file_new(_: &FileNew, cx: &mut AppContext) {
 
     window
         .update(cx, |view, cx| {
-            cx.focus_view(&view.text_input);
+            cx.focus_view(&view.editor);
             cx.activate(true);
         })
         .unwrap();
 }
 
-struct InputExample {
-    text_input: View<TextInput>,
+struct TextEditor {
+    editor: View<Editor>,
     focus_handle: FocusHandle,
 }
 
-impl FocusableView for InputExample {
+impl FocusableView for TextEditor {
     fn focus_handle(&self, _: &AppContext) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
-impl Render for InputExample {
+impl Render for TextEditor {
     fn render(&mut self, _: &mut ViewContext<Self>) -> impl IntoElement {
         div()
             .bg(rgb(0x1a1a29))
             .flex()
             .flex_col()
             .size_full()
-            .child(self.text_input.clone())
+            .child(self.editor.clone())
     }
 }
 
 fn main() {
     App::new().run(|cx: &mut AppContext| {
         cx.bind_keys([
-            KeyBinding::new("enter", NewLine, None),
-            KeyBinding::new("cmd-enter", NewLineWithoutSplit, None),
-            KeyBinding::new("backspace", Backspace, None),
-            KeyBinding::new("delete", Delete, None),
-            KeyBinding::new("left", Left, None),
-            KeyBinding::new("right", Right, None),
-            KeyBinding::new("up", Up, None),
-            KeyBinding::new("down", Down, None),
-            KeyBinding::new("home", Home, None),
-            KeyBinding::new("end", End, None),
-            KeyBinding::new("shift-left", SelectLeft, None),
-            KeyBinding::new("shift-right", SelectRight, None),
-            KeyBinding::new("shift-up", SelectUp, None),
-            KeyBinding::new("shift-down", SelectDown, None),
-            KeyBinding::new("cmd-a", SelectAll, None),
-            KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, None),
-            KeyBinding::new("cmd-c", Copy, None),
-            KeyBinding::new("cmd-v", Paste, None),
-            KeyBinding::new("cmd-x", Cut, None),
-            KeyBinding::new("alt-left", MoveToWordStart, None),
-            KeyBinding::new("alt-right", MoveToWordEnd, None),
-            KeyBinding::new("cmd-left", MoveToLineStart, None),
-            KeyBinding::new("cmd-right", MoveToLineEnd, None),
-            KeyBinding::new("cmd-up", MoveToDocStart, None),
-            KeyBinding::new("cmd-down", MoveToDocEnd, None),
-            KeyBinding::new("shift-alt-left", SelectWordStart, None),
-            KeyBinding::new("shift-alt-right", SelectWordEnd, None),
-            KeyBinding::new("shift-cmd-left", SelectLineStart, None),
-            KeyBinding::new("shift-cmd-right", SelectLineEnd, None),
-            KeyBinding::new("shift-cmd-up", SelectDocStart, None),
-            KeyBinding::new("shift-cmd-down", SelectDocEnd, None),
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-o", Open, None),
             KeyBinding::new("cmd-s", Save, None),
             KeyBinding::new("shift-cmd-s", SaveAs, None),
             KeyBinding::new("cmd-h", Hide, None),
-            KeyBinding::new("cmd-z", Undo, None),
             KeyBinding::new("cmd-n", FileNew, None),
-            KeyBinding::new("shift-cmd-z", Redo, None),
             KeyBinding::new("cmd-w", WindowClose, None),
             KeyBinding::new("cmd-m", Minimize, None),
         ]);
@@ -140,8 +109,8 @@ fn main() {
                     ..Default::default()
                 },
                 |cx| {
-                    let text_input = cx.new_view(|cx| {
-                        let mut element = TextInput::new(cx);
+                    let editor = cx.new_view(|cx| {
+                        let mut element = Editor::new(cx);
 
                         #[cfg(debug_assertions)]
                         {
@@ -155,8 +124,8 @@ fn main() {
 
                         return element;
                     });
-                    cx.new_view(|cx| InputExample {
-                        text_input,
+                    cx.new_view(|cx| TextEditor {
+                        editor,
                         focus_handle: cx.focus_handle(),
                     })
                 },
@@ -222,7 +191,7 @@ fn main() {
 
         window
             .update(cx, |view, cx| {
-                cx.focus_view(&view.text_input);
+                cx.focus_view(&view.editor);
                 cx.activate(true);
             })
             .unwrap();

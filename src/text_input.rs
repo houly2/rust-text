@@ -7,13 +7,10 @@ use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement
 use gpui::*;
 use ropey::*;
 use std::cell::RefCell;
-use std::fs;
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use unicode_segmentation::*;
-
-actions!(set_menus, [Open, Save, SaveAs, About]);
 
 actions!(
     text_input,
@@ -51,8 +48,6 @@ actions!(
         SelectDocEnd,
         Undo,
         Redo,
-        WindowClose,
-        Minimize
     ]
 );
 
@@ -98,7 +93,43 @@ impl TextInput {
         let title_bar = cx.new_view(|_| TitleBar::new(weak_handle.clone()));
         let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
 
-        let this = Self {
+        cx.bind_keys([
+            KeyBinding::new("enter", NewLine, None),
+            KeyBinding::new("cmd-enter", NewLineWithoutSplit, None),
+            KeyBinding::new("backspace", Backspace, None),
+            KeyBinding::new("delete", Delete, None),
+            KeyBinding::new("left", Left, None),
+            KeyBinding::new("right", Right, None),
+            KeyBinding::new("up", Up, None),
+            KeyBinding::new("down", Down, None),
+            KeyBinding::new("home", Home, None),
+            KeyBinding::new("end", End, None),
+            KeyBinding::new("shift-left", SelectLeft, None),
+            KeyBinding::new("shift-right", SelectRight, None),
+            KeyBinding::new("shift-up", SelectUp, None),
+            KeyBinding::new("shift-down", SelectDown, None),
+            KeyBinding::new("cmd-a", SelectAll, None),
+            KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, None),
+            KeyBinding::new("cmd-c", Copy, None),
+            KeyBinding::new("cmd-v", Paste, None),
+            KeyBinding::new("cmd-x", Cut, None),
+            KeyBinding::new("alt-left", MoveToWordStart, None),
+            KeyBinding::new("alt-right", MoveToWordEnd, None),
+            KeyBinding::new("cmd-left", MoveToLineStart, None),
+            KeyBinding::new("cmd-right", MoveToLineEnd, None),
+            KeyBinding::new("cmd-up", MoveToDocStart, None),
+            KeyBinding::new("cmd-down", MoveToDocEnd, None),
+            KeyBinding::new("shift-alt-left", SelectWordStart, None),
+            KeyBinding::new("shift-alt-right", SelectWordEnd, None),
+            KeyBinding::new("shift-cmd-left", SelectLineStart, None),
+            KeyBinding::new("shift-cmd-right", SelectLineEnd, None),
+            KeyBinding::new("shift-cmd-up", SelectDocStart, None),
+            KeyBinding::new("shift-cmd-down", SelectDocEnd, None),
+            KeyBinding::new("cmd-z", Undo, None),
+            KeyBinding::new("shift-cmd-z", Redo, None),
+        ]);
+
+        Self {
             focus_handle: cx.focus_handle(),
             content: "".into(),
             selected_range: 0..0,
@@ -138,16 +169,7 @@ impl TextInput {
                     });
                 }),
             ],
-        };
-
-        let handle = cx.view().downgrade();
-        cx.on_window_should_close(move |cx| {
-            handle
-                .update(cx, |this, cx| this.allowed_to_close_window(cx))
-                .unwrap_or(true)
-        });
-
-        return this;
+        }
     }
 
     pub fn notify_about_paint(&mut self, cx: &mut ViewContext<Self>) {
@@ -162,15 +184,6 @@ impl TextInput {
         on_notify: impl FnOnce(&mut Self, &mut ViewContext<Self>) + 'static,
     ) {
         RefCell::borrow_mut(&self.on_next_paint_stack).push(Box::new(on_notify));
-    }
-
-    fn about(&mut self, _: &About, cx: &mut ViewContext<Self>) {
-        let message = format!("text");
-        let detail = format!("a little #DecemberAdventure text editor");
-        let prompt = cx.prompt(PromptLevel::Info, &message, Some(&detail), &["Ok"]);
-        cx.foreground_executor()
-            .spawn(async { prompt.await.ok() })
-            .detach();
     }
 
     pub fn execute_command(&mut self, command: Box<dyn Command>, cx: &mut ViewContext<Self>) {
@@ -201,128 +214,8 @@ impl TextInput {
         self.replace_text_in_range(None, &text, cx);
     }
 
-    fn prompt_for_path(
-        &self,
-        callback: impl FnOnce(WeakView<Self>, Option<&PathBuf>, AsyncWindowContext) + 'static,
-        cx: &mut ViewContext<Self>,
-    ) {
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-        });
-
-        cx.spawn(|weak_view, cx| async move {
-            match Flatten::flatten(paths.await.map_err(|e| e.into())) {
-                Ok(Some(paths)) => {
-                    if let Some(path) = paths.first() {
-                        callback(weak_view, Some(path), cx)
-                    } else {
-                        callback(weak_view, None, cx)
-                    }
-                }
-                Ok(None) => callback(weak_view, None, cx),
-                Err(_) => callback(weak_view, None, cx),
-            }
-        })
-        .detach();
-    }
-
-    fn prompt_for_new_path(
-        &self,
-        callback: impl FnOnce(WeakView<Self>, Option<&PathBuf>, AsyncWindowContext) + 'static,
-        cx: &mut ViewContext<Self>,
-    ) {
-        let path = cx.prompt_for_new_path(Path::new("").into());
-
-        cx.spawn(|weak_view, cx| async move {
-            match Flatten::flatten(path.await.map_err(|e| e.into())) {
-                Ok(Some(path)) => callback(weak_view, Some(&path), cx),
-                Ok(None) => callback(weak_view, None, cx),
-                Err(_) => callback(weak_view, None, cx),
-            }
-        })
-        .detach();
-    }
-
-    fn set_file_path(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
+    pub fn set_file_path(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
         self.current_file_path = Some(path);
-        cx.notify();
-    }
-
-    fn save_handler(&mut self, _: &Save, cx: &mut ViewContext<Self>) {
-        self.save(cx);
-    }
-
-    fn save(&mut self, cx: &mut ViewContext<Self>) {
-        if let Some(path) = &self.current_file_path {
-            self.save_file(path.into(), cx);
-        } else {
-            self.save_as(cx);
-        }
-    }
-
-    fn save_as_handler(&mut self, _: &SaveAs, cx: &mut ViewContext<Self>) {
-        self.save_as(cx);
-    }
-
-    fn save_as(&mut self, cx: &mut ViewContext<Self>) {
-        self.prompt_for_new_path(
-            |this, path, mut cx| {
-                if let Some(path) = path {
-                    cx.update(|cx| {
-                        if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| {
-                                this.set_file_path(path.into(), cx);
-                                this.save_file(path.into(), cx);
-                            });
-                        }
-                    })
-                    .ok();
-                } else {
-                    // todo: handle
-                }
-            },
-            cx,
-        );
-    }
-
-    fn open(&mut self, _: &Open, cx: &mut ViewContext<Self>) {
-        self.prompt_for_path(
-            |this, path, mut cx| {
-                if let Some(path) = path {
-                    cx.update(|cx| {
-                        cx.add_recent_document(path);
-                        if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| {
-                                this.read_file(path, cx);
-                            });
-                        }
-                    })
-                    .ok();
-                } else {
-                    // todo: handle
-                }
-            },
-            cx,
-        );
-    }
-
-    pub fn read_file(&mut self, path: &PathBuf, cx: &mut ViewContext<Self>) {
-        if let Ok(new_content) = fs::read_to_string(path) {
-            self.set_file_path(path.into(), cx);
-            self.insert(new_content.into(), cx);
-            self.is_dirty = false;
-            self.move_to(0, cx);
-        }
-    }
-
-    fn save_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
-        match fs::write(path, self.content.to_string()) {
-            Ok(_) => self.is_dirty = false,
-            Err(error) => println!("{:?}", error),
-        }
-
         cx.notify();
     }
 
@@ -613,7 +506,7 @@ impl TextInput {
         self.select_to(self.content.len_chars(), cx);
     }
 
-    fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
+    pub fn move_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         self.selected_range = offset..offset;
         self.blink_manager.update(cx, BlinkManager::pause);
 
@@ -830,43 +723,6 @@ impl TextInput {
         cx.notify();
     }
 
-    fn minimize(&mut self, _: &Minimize, cx: &mut ViewContext<Self>) {
-        cx.minimize_window();
-    }
-
-    fn close_window(&mut self, _: &WindowClose, cx: &mut ViewContext<Self>) {
-        if self.allowed_to_close_window(cx) {
-            cx.remove_window();
-        }
-    }
-
-    fn allowed_to_close_window(&self, cx: &mut ViewContext<Self>) -> bool {
-        if !self.is_dirty {
-            true
-        } else {
-            let message = "Close without saving?";
-            let detail = "Data will be lost";
-            let prompt = cx.prompt(
-                PromptLevel::Info,
-                &message,
-                Some(&detail),
-                &["Save", "Don't Save", "Abort"],
-            );
-            cx.spawn(|this, mut cx| async move {
-                match prompt.await.ok() {
-                    Some(0) => this.update(&mut cx, |this, cx| {
-                        this.save(cx);
-                        cx.remove_window();
-                    }),
-                    Some(1) => this.update(&mut cx, |_, cx| cx.remove_window()),
-                    Some(2) | Some(3_usize..) | None => Ok({}),
-                }
-            })
-            .detach();
-            false
-        }
-    }
-
     pub fn set_soft_wrap(&mut self, enabled: bool, cx: &mut ViewContext<Self>) {
         self.settings_soft_wrap = enabled;
         cx.notify();
@@ -874,6 +730,11 @@ impl TextInput {
 
     pub fn soft_wrap_enabled(&self) -> bool {
         self.settings_soft_wrap
+    }
+
+    pub fn mark_dirty(&mut self, value: bool, cx: &mut ViewContext<Self>) {
+        self.is_dirty = value;
+        cx.notify();
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -940,12 +801,6 @@ impl Render for TextInput {
                     .on_action(cx.listener(Self::select_doc_end))
                     .on_action(cx.listener(Self::undo))
                     .on_action(cx.listener(Self::redo))
-                    .on_action(cx.listener(Self::open))
-                    .on_action(cx.listener(Self::save_handler))
-                    .on_action(cx.listener(Self::save_as_handler))
-                    .on_action(cx.listener(Self::minimize))
-                    .on_action(cx.listener(Self::close_window))
-                    .on_action(cx.listener(Self::about))
                     .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
                     .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
                     .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
