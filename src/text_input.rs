@@ -1,6 +1,7 @@
 use crate::command::{Command, DeleteCommand, InsertCommand};
 use crate::scroll_manager::ScrollManager;
 use crate::status_bar::StatusBar;
+use crate::title_bar::TitleBar;
 use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
 use gpui::*;
@@ -72,6 +73,7 @@ pub struct TextInput {
     pub blink_manager: Model<BlinkManager>,
     pub scroll_manager: Model<ScrollManager>,
 
+    title_bar: View<TitleBar>,
     status_bar: View<StatusBar>,
 
     undo_stack: Vec<Box<dyn Command>>,
@@ -93,6 +95,7 @@ impl TextInput {
         let scroll_manager = cx.new_model(|_| ScrollManager::new());
 
         let weak_handle = cx.view().downgrade();
+        let title_bar = cx.new_view(|_| TitleBar::new(weak_handle.clone()));
         let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
 
         let this = Self {
@@ -108,6 +111,7 @@ impl TextInput {
             is_scroll_dragging: false,
             blink_manager: blink_manager.clone(),
             scroll_manager: scroll_manager.clone(),
+            title_bar,
             status_bar,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -872,16 +876,12 @@ impl TextInput {
         self.settings_soft_wrap
     }
 
-    fn file_name(&self) -> &str {
-        if let Some(path) = &self.current_file_path {
-            if let Some(file_name) = path.file_name() {
-                if let Some(file_name) = file_name.to_str() {
-                    return file_name;
-                }
-            }
-        }
+    pub fn is_dirty(&self) -> bool {
+        self.is_dirty
+    }
 
-        ""
+    pub fn file_path(&self) -> &Option<PathBuf> {
+        &self.current_file_path
     }
 }
 
@@ -894,21 +894,7 @@ impl Render for TextInput {
             .w_full()
             .text_color(rgb(0xcdd6f4))
             .font_family("Iosevka")
-            .child(
-                div().h(px(32.)).flex_none().child(
-                    div()
-                        .flex()
-                        .h_full()
-                        .w_full()
-                        .justify_center()
-                        .items_center()
-                        .child(format!(
-                            "{}{}",
-                            if self.is_dirty { "🞄" } else { "" },
-                            self.file_name()
-                        )),
-                ),
-            )
+            .child(self.title_bar.clone())
             .child(
                 div()
                     .flex()

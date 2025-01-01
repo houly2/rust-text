@@ -7,6 +7,7 @@ mod scroll_manager;
 mod status_bar;
 mod text_element;
 mod text_input;
+mod title_bar;
 
 use crate::text_input::*;
 
