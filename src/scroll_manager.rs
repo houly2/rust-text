@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui::*;
 use smallvec::{smallvec, SmallVec};
 
-use crate::lines::Lines;
+use crate::{lines::Lines, theme_manager::ActiveTheme};
 
 pub struct ScrollManager {
     show: bool,
@@ -180,6 +180,7 @@ impl ScrollManager {
         bounds: &Bounds<Pixels>,
         text_height: Pixels,
         cursor_pos: Point<Pixels>,
+        cx: &AppContext,
     ) -> Option<SmallVec<[PaintQuad; 2]>> {
         if bounds.size.height >= text_height || !self.show {
             return None;
@@ -197,6 +198,8 @@ impl ScrollManager {
         let cursor_bar_pos =
             own_bounds.top() + (own_bounds.size.height * (cursor_pos.y / text_height));
 
+        let theme = cx.theme();
+
         Some(smallvec![
             quad(
                 own_bounds,
@@ -206,14 +209,14 @@ impl ScrollManager {
                     bottom_right: px(0.),
                     bottom_left: px(0.),
                 },
-                rgba(0x14142033),
+                theme.scroll_bar_bg,
                 Edges {
                     top: px(0.),
                     right: px(0.),
                     bottom: px(0.),
                     left: px(1.),
                 },
-                rgba(0x2e2e4d66),
+                theme.scroll_bar_border,
             ),
             quad(
                 Bounds::new(
@@ -229,7 +232,7 @@ impl ScrollManager {
                     bottom_right: px(3.),
                     bottom_left: px(3.),
                 },
-                rgba(0xaeaecd44),
+                theme.scroll_bar_handle_bg,
                 Edges {
                     top: px(0.),
                     right: px(0.),
@@ -243,7 +246,7 @@ impl ScrollManager {
                     point(own_bounds.left() + px(3.), cursor_bar_pos),
                     size(self.width - px(6.), px(2.))
                 ),
-                rgba(0x89b4fadd)
+                theme.scroll_bar_cursor_highlight
             )
         ])
     }

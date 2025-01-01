@@ -1,6 +1,6 @@
 use gpui::*;
 
-use crate::TextInput;
+use crate::{theme_manager::ActiveTheme, TextInput};
 
 pub struct StatusBar {
     text_input: WeakView<TextInput>,
@@ -97,7 +97,7 @@ impl Render for StatusBar {
                     .on_click(cx.listener(Self::toggle_soft_wrap))
                     .child(self.soft_wrap_status(cx))
                     .cursor(CursorStyle::PointingHand)
-                    .hover(|style| style.rounded(px(6.)).bg(rgb(0x000000))),
+                    .hover(|style| style.rounded(px(6.)).bg(cx.theme().hover_bg)),
             )
             .child(div().flex_grow())
             .child(self.selection_format(cx))

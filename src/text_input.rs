@@ -1,6 +1,7 @@
 use crate::command::{Command, DeleteCommand, InsertCommand};
 use crate::scroll_manager::ScrollManager;
 use crate::status_bar::StatusBar;
+use crate::theme_manager::ActiveTheme;
 use crate::title_bar::TitleBar;
 use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
@@ -753,7 +754,7 @@ impl Render for TextInput {
             .flex_col()
             .h_full()
             .w_full()
-            .text_color(rgb(0xcdd6f4))
+            .text_color(cx.theme().editor_text)
             .font_family("Iosevka")
             .child(self.title_bar.clone())
             .child(
@@ -762,7 +763,7 @@ impl Render for TextInput {
                     .h_full()
                     .w_full()
                     .overflow_hidden()
-                    .bg(rgb(0x1e1e2e))
+                    .bg(cx.theme().editor_background)
                     .line_height(px(28.))
                     .text_size(px(18.))
                     .key_context("TextInput")

@@ -1,5 +1,6 @@
 use crate::lines::Lines;
 use crate::text_input::TextInput;
+use crate::theme_manager::ActiveTheme;
 use gpui::*;
 use smallvec::SmallVec;
 
@@ -152,8 +153,10 @@ impl Element for TextElement {
             lines.position_for_byte_idx_in_line(cursor_byte_idx - line_byte_idx, line_idx);
 
         let scroll_manager = input.scroll_manager.read(cx);
-        scroll_bar = scroll_manager.paint_bar(&bounds, lines.height(), cursor_pos);
         let offset = scroll_manager.offset;
+        scroll_bar = input.scroll_manager.read_with(cx, |this, cx| {
+            this.paint_bar(&bounds, lines.height(), cursor_pos, cx)
+        });
 
         if input.blink_manager.read(cx).show() {
             paint_cursor = Some(fill(
@@ -164,7 +167,7 @@ impl Element for TextElement {
                     ),
                     size(px(2.), line_height),
                 ),
-                rgb(0xcdd6f4),
+                cx.theme().cursor,
             ))
         } else {
             paint_cursor = None;
@@ -187,7 +190,7 @@ impl Element for TextElement {
                 lines.position_for_byte_idx_in_line(end_byte_idx - end_line_byte_idx, end_line_idx);
 
             selections = {
-                let selection_color = rgba(0x7f849c64);
+                let selection_color = cx.theme().selection_bg;
                 let visual_line_count: u32 =
                     ((end_point.y - start_point.y) / lines.line_height).round() as u32;
                 let mut selection_quads = Vec::new();

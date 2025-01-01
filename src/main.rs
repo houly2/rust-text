@@ -1,4 +1,5 @@
 use gpui::*;
+use theme_manager::ThemeManager;
 
 mod blink_manager;
 mod command;
@@ -8,10 +9,12 @@ mod scroll_manager;
 mod status_bar;
 mod text_element;
 mod text_input;
+mod theme_manager;
 mod title_bar;
 
 use crate::editor::*;
 use crate::text_input::*;
+use crate::theme_manager::ActiveTheme;
 
 actions!(set_menus, [Quit, Hide, FileNew]);
 
@@ -41,9 +44,8 @@ fn file_new(_: &FileNew, cx: &mut AppContext) {
                 ..Default::default()
             },
             |cx| {
-                cx.new_view(|cx| TextEditor {
-                    editor: cx.new_view(|cx| Editor::new(cx)),
-                    focus_handle: cx.focus_handle(),
+                cx.new_view(|cx| {
+                    TextEditor::new(cx.new_view(|cx| Editor::new(cx)), cx.focus_handle(), cx)
                 })
             },
         )
@@ -60,6 +62,20 @@ fn file_new(_: &FileNew, cx: &mut AppContext) {
 struct TextEditor {
     editor: View<Editor>,
     focus_handle: FocusHandle,
+    _theme_manager: ThemeManager,
+}
+
+impl TextEditor {
+    fn new(editor: View<Editor>, focus_handle: FocusHandle, cx: &mut AppContext) -> Self {
+        let theme_manager = ThemeManager::new();
+        cx.set_global::<ThemeManager>(theme_manager.clone());
+
+        Self {
+            editor,
+            focus_handle,
+            _theme_manager: theme_manager,
+        }
+    }
 }
 
 impl FocusableView for TextEditor {
@@ -69,9 +85,9 @@ impl FocusableView for TextEditor {
 }
 
 impl Render for TextEditor {
-    fn render(&mut self, _: &mut ViewContext<Self>) -> impl IntoElement {
+    fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
-            .bg(rgb(0x1a1a29))
+            .bg(cx.theme().background)
             .flex()
             .flex_col()
             .size_full()
@@ -124,10 +140,7 @@ fn main() {
 
                         return element;
                     });
-                    cx.new_view(|cx| TextEditor {
-                        editor,
-                        focus_handle: cx.focus_handle(),
-                    })
+                    cx.new_view(|cx| TextEditor::new(editor, cx.focus_handle(), cx))
                 },
             )
             .unwrap();
