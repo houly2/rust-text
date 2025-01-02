@@ -1,4 +1,5 @@
 use gpui::*;
+use settings_manager::SettingsManager;
 use theme_manager::ThemeManager;
 
 mod blink_manager;
@@ -6,6 +7,7 @@ mod command;
 mod editor;
 mod lines;
 mod scroll_manager;
+mod settings_manager;
 mod status_bar;
 mod text_element;
 mod text_input;
@@ -62,18 +64,15 @@ fn file_new(_: &FileNew, cx: &mut AppContext) {
 struct TextEditor {
     editor: View<Editor>,
     focus_handle: FocusHandle,
-    _theme_manager: ThemeManager,
+    _settings_manager: SettingsManager,
 }
 
 impl TextEditor {
     fn new(editor: View<Editor>, focus_handle: FocusHandle, cx: &mut AppContext) -> Self {
-        let theme_manager = ThemeManager::new();
-        cx.set_global::<ThemeManager>(theme_manager.clone());
-
         Self {
             editor,
             focus_handle,
-            _theme_manager: theme_manager,
+            _settings_manager: SettingsManager::new(cx),
         }
     }
 }

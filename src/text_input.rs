@@ -1,5 +1,6 @@
 use crate::command::{Command, DeleteCommand, InsertCommand};
 use crate::scroll_manager::ScrollManager;
+use crate::settings_manager::CurrentSettings;
 use crate::status_bar::StatusBar;
 use crate::theme_manager::ActiveTheme;
 use crate::title_bar::TitleBar;
@@ -755,7 +756,7 @@ impl Render for TextInput {
             .h_full()
             .w_full()
             .text_color(cx.theme().editor_text)
-            .font_family("Iosevka")
+            .font_family(cx.settings().font_family)
             .child(self.title_bar.clone())
             .child(
                 div()
