@@ -10,7 +10,11 @@ unicode-segmentation = "1.12"
 ropey = "1.6.1"
 smallvec = "1.13.2"
 
-[package.metadata.bundle]
-name = "text"
+# https://crates.io/crates/cargo-packager
+[package.metadata.packager]
+formats = ["app"]
+product_name = "text"
 identifier = "de.nullwire.text"
-icon = ["assets/icon*.png"]
+icons = ["assets/icon*.png"]
+file_associations = [{ extensions = ["txt", "md"] }]
+before-packaging-command = "cargo build --release"
