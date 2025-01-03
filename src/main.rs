@@ -1,22 +1,22 @@
-use std::path::PathBuf;
-
 use futures::channel::mpsc;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use gpui::*;
 use settings_manager::SettingsManager;
-use theme_manager::ThemeManager;
+use std::path::PathBuf;
 
 mod blink_manager;
 mod command;
 mod editor;
 mod lines;
+mod modal_manager;
 mod scroll_manager;
 mod settings_manager;
 mod status_bar;
 mod text_element;
 mod text_input;
 mod theme_manager;
+mod theme_selector;
 mod title_bar;
 
 use crate::editor::*;

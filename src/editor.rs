@@ -5,15 +5,24 @@ use std::{
 
 use gpui::*;
 
-use crate::text_input::TextInput;
+use crate::{modal_manager::ModalManager, text_input::TextInput, theme_selector::ThemeSelector};
 
 actions!(
     set_menus,
-    [Open, Save, SaveAs, About, WindowClose, Minimize]
+    [
+        Open,
+        Save,
+        SaveAs,
+        About,
+        WindowClose,
+        Minimize,
+        ToggleTheme
+    ]
 );
 
 pub struct Editor {
     text_input: View<TextInput>,
+    modal_manager: View<ModalManager>,
 }
 
 impl Editor {
@@ -25,8 +34,11 @@ impl Editor {
                 .unwrap_or(true)
         });
 
+        cx.bind_keys([KeyBinding::new("cmd-t", ToggleTheme, None)]);
+
         Self {
             text_input: cx.new_view(|cx| TextInput::new(cx)),
+            modal_manager: cx.new_view(|cx| ModalManager::new(cx)),
         }
     }
 
@@ -203,6 +215,12 @@ impl Editor {
             false
         }
     }
+
+    fn toggle_modal(&mut self, _: &ToggleTheme, cx: &mut ViewContext<Self>) {
+        self.modal_manager.update(cx, |modal_layer, cx| {
+            modal_layer.toggle_modal(cx, move |cx| ThemeSelector::new(cx))
+        });
+    }
 }
 
 impl Render for Editor {
@@ -217,7 +235,9 @@ impl Render for Editor {
             .on_action(cx.listener(Self::minimize))
             .on_action(cx.listener(Self::close_window))
             .on_action(cx.listener(Self::about))
+            .on_action(cx.listener(Self::toggle_modal))
             .child(self.text_input.clone())
+            .child(self.modal_manager.clone())
     }
 }
 

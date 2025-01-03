@@ -1,6 +1,7 @@
 use gpui::{AppContext, Global};
+use smallvec::SmallVec;
 
-use crate::theme_manager::ThemeManager;
+use crate::theme_manager::{Theme, ThemeManager};
 
 #[derive(Clone)]
 pub struct Settings {
@@ -35,10 +36,20 @@ impl Global for SettingsManager {}
 
 pub trait CurrentSettings {
     fn settings(&self) -> &Settings;
+    fn themes(&self) -> &SmallVec<[Theme; 2]>;
+    fn change_theme(&mut self, new_theme: &Theme);
 }
 
 impl CurrentSettings for AppContext {
     fn settings(&self) -> &Settings {
         &self.global::<SettingsManager>().settings
+    }
+
+    fn themes(&self) -> &SmallVec<[Theme; 2]> {
+        &self.global::<ThemeManager>().themes()
+    }
+
+    fn change_theme(&mut self, new_theme: &Theme) {
+        let _ = &self.global_mut::<ThemeManager>().set_theme(new_theme);
     }
 }
