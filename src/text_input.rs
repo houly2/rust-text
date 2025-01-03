@@ -123,8 +123,11 @@ impl TextInput {
             KeyBinding::new("shift-cmd-z", Redo, None),
         ]);
 
+
+        let focus_handle = cx.focus_handle();
+
         Self {
-            focus_handle: cx.focus_handle(),
+            focus_handle: focus_handle.clone(),
             content: "".into(),
             selected_range: 0..0,
             selection_reversed: false,
@@ -152,13 +155,24 @@ impl TextInput {
                             scroll_manager.enable(cx);
                         });
                     }
+
+                    let has_focus = this.focus_handle.is_focused(cx);
+
                     this.blink_manager.update(cx, |blink_manager, cx| {
-                        if active {
+                        if active && has_focus {
                             blink_manager.enable(cx);
                         } else {
                             blink_manager.disable();
                         }
                     });
+                }),
+                cx.on_focus_in(&focus_handle, |this, cx| {
+                    this.blink_manager
+                        .update(cx, |blink_manager, cx| blink_manager.enable(cx))
+                }),
+                cx.on_focus_out(&focus_handle, |this, _, cx| {
+                    this.blink_manager
+                        .update(cx, |blink_manager, _| blink_manager.disable())
                 }),
             ],
         }
