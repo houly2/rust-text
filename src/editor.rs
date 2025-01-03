@@ -5,7 +5,10 @@ use std::{
 
 use gpui::*;
 
-use crate::{modal_manager::ModalManager, text_input::TextInput, theme_selector::ThemeSelector};
+use crate::{
+    modal_manager::ModalManager, status_bar::StatusBar, text_input::TextInput,
+    theme_selector::ThemeSelector, title_bar::TitleBar,
+};
 
 actions!(
     set_menus,
@@ -22,6 +25,8 @@ actions!(
 
 pub struct Editor {
     text_input: View<TextInput>,
+    title_bar: View<TitleBar>,
+    status_bar: View<StatusBar>,
     modal_manager: View<ModalManager>,
 }
 
@@ -36,8 +41,16 @@ impl Editor {
 
         cx.bind_keys([KeyBinding::new("cmd-t", ToggleTheme, None)]);
 
+        let text_input = cx.new_view(|cx| TextInput::new(TextInputMode::Full, cx));
+
+        let weak_handle = text_input.downgrade();
+        let title_bar = cx.new_view(|_| TitleBar::new(weak_handle.clone()));
+        let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
+
         Self {
-            text_input: cx.new_view(|cx| TextInput::new(cx)),
+            text_input,
+            title_bar,
+            status_bar,
             modal_manager: cx.new_view(|cx| ModalManager::new(cx)),
         }
     }
@@ -226,6 +239,8 @@ impl Editor {
 impl Render for Editor {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
+            .flex()
+            .flex_col()
             .h_full()
             .w_full()
             .key_context("Editor")
@@ -236,7 +251,9 @@ impl Render for Editor {
             .on_action(cx.listener(Self::close_window))
             .on_action(cx.listener(Self::about))
             .on_action(cx.listener(Self::toggle_modal))
+            .child(self.title_bar.clone())
             .child(self.text_input.clone())
+            .child(self.status_bar.clone())
             .child(self.modal_manager.clone())
     }
 }

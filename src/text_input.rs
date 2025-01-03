@@ -1,9 +1,7 @@
 use crate::command::{Command, DeleteCommand, InsertCommand};
 use crate::scroll_manager::ScrollManager;
 use crate::settings_manager::CurrentSettings;
-use crate::status_bar::StatusBar;
 use crate::theme_manager::ActiveTheme;
-use crate::title_bar::TitleBar;
 use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
 use gpui::*;
@@ -70,9 +68,6 @@ pub struct TextInput {
     pub blink_manager: Model<BlinkManager>,
     pub scroll_manager: Model<ScrollManager>,
 
-    title_bar: View<TitleBar>,
-    status_bar: View<StatusBar>,
-
     undo_stack: Vec<Box<dyn Command>>,
     redo_stack: Vec<Box<dyn Command>>,
 
@@ -91,9 +86,6 @@ impl TextInput {
         let blink_manager = cx.new_model(|_| BlinkManager::new());
         let scroll_manager = cx.new_model(|_| ScrollManager::new());
 
-        let weak_handle = cx.view().downgrade();
-        let title_bar = cx.new_view(|_| TitleBar::new(weak_handle.clone()));
-        let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
 
         cx.bind_keys([
             KeyBinding::new("enter", NewLine, None),
@@ -144,8 +136,6 @@ impl TextInput {
             is_scroll_dragging: false,
             blink_manager: blink_manager.clone(),
             scroll_manager: scroll_manager.clone(),
-            title_bar,
-            status_bar,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             on_next_paint_stack: Default::default(),
@@ -757,7 +747,6 @@ impl Render for TextInput {
             .w_full()
             .text_color(cx.theme().editor_text)
             .font_family(cx.settings().font_family)
-            .child(self.title_bar.clone())
             .child(
                 div()
                     .flex()
@@ -810,7 +799,6 @@ impl Render for TextInput {
                     .on_mouse_move(cx.listener(Self::on_mouse_move))
                     .child(TextElement::new(cx.view().clone())),
             )
-            .child(self.status_bar.clone())
     }
 }
 

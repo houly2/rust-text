@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use gpui::*;
 
-use crate::TextInput;
+use crate::{settings_manager::CurrentSettings, theme_manager::ActiveTheme, TextInput};
 
 pub struct TitleBar {
     text_input: WeakView<TextInput>,
@@ -42,14 +42,20 @@ impl TitleBar {
 
 impl Render for TitleBar {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
-        div().h(px(32.)).flex_none().child(
-            div()
-                .flex()
-                .h_full()
-                .w_full()
-                .justify_center()
-                .items_center()
-                .child(self.title(cx)),
-        )
+        div()
+            .h(px(32.))
+            .flex_none()
+            .font_family(cx.settings().font_family)
+            .text_sm()
+            .text_color(cx.theme().editor_text)
+            .child(
+                div()
+                    .flex()
+                    .h_full()
+                    .w_full()
+                    .justify_center()
+                    .items_center()
+                    .child(self.title(cx)),
+            )
     }
 }

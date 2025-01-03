@@ -1,6 +1,6 @@
 use gpui::*;
 
-use crate::{theme_manager::ActiveTheme, TextInput};
+use crate::{settings_manager::CurrentSettings, theme_manager::ActiveTheme, TextInput};
 
 pub struct StatusBar {
     text_input: WeakView<TextInput>,
@@ -89,7 +89,9 @@ impl Render for StatusBar {
             .px(px(8.))
             .pt(px(2.))
             .pb(px(4.))
-            .text_size(px(14.))
+            .font_family(cx.settings().font_family)
+            .text_sm()
+            .text_color(cx.theme().editor_text)
             .child(
                 div()
                     .px(px(4.))
