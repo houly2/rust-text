@@ -1,3 +1,8 @@
+use std::path::PathBuf;
+
+use futures::channel::mpsc;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures::StreamExt;
 use gpui::*;
 use settings_manager::SettingsManager;
 use theme_manager::ThemeManager;
@@ -20,7 +25,7 @@ use crate::theme_manager::ActiveTheme;
 
 actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew]);
 
-fn file_new(_: &FileNew, cx: &mut AppContext) {
+fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
     let window = cx
         .open_window(
             WindowOptions {
@@ -38,9 +43,16 @@ fn file_new(_: &FileNew, cx: &mut AppContext) {
                 ..Default::default()
             },
             |cx| {
-                cx.new_view(|cx| {
-                    TextEditor::new(cx.new_view(|cx| Editor::new(cx)), cx.focus_handle(), cx)
-                })
+                let editor = cx.new_view(|cx| {
+                    let mut element = Editor::new(cx);
+
+                    if let Some(path) = path {
+                        element.read_file(&path, cx);
+                    }
+
+                    return element;
+                });
+                cx.new_view(|cx| TextEditor::new(editor, cx.focus_handle(), cx))
             },
         )
         .unwrap();
@@ -86,8 +98,36 @@ impl Render for TextEditor {
     }
 }
 
+#[derive(Clone)]
+struct OpenListener(UnboundedSender<Vec<String>>);
+
+impl OpenListener {
+    pub fn new() -> (Self, UnboundedReceiver<Vec<String>>) {
+        let (tx, rx) = mpsc::unbounded();
+        (OpenListener(tx), rx)
+    }
+
+    pub fn open_urls(&self, urls: Vec<String>) {
+        let urls = urls
+            .iter()
+            .filter_map(|url| url.strip_prefix("file://"))
+            .map(|str| str.to_string())
+            .collect();
+        self.0.unbounded_send(urls).ok();
+    }
+}
+
 fn main() {
-    App::new().run(|cx: &mut AppContext| {
+    let app = App::new();
+
+    let (open_listener, mut open_rx) = OpenListener::new();
+
+    app.on_open_urls({
+        let open_listener = open_listener.clone();
+        move |urls| open_listener.open_urls(urls)
+    });
+
+    app.run(move |cx: &mut AppContext| {
         cx.bind_keys([
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-o", Open, None),
@@ -100,55 +140,11 @@ fn main() {
             KeyBinding::new("cmd-m", Minimize, None),
         ]);
 
-        let window = cx
-            .open_window(
-                WindowOptions {
-                    titlebar: Some(TitlebarOptions {
-                        title: None,
-                        appears_transparent: true,
-                        traffic_light_position: Some(point(px(9.0), px(9.0))),
-                    }),
-                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                        None,
-                        size(px(400.), px(320.)),
-                        cx,
-                    ))),
-                    window_min_size: Some(size(px(200.), px(160.))),
-                    ..Default::default()
-                },
-                |cx| {
-                    let editor = cx.new_view(|cx| {
-                        let mut element = Editor::new(cx);
-
-                        #[cfg(debug_assertions)]
-                        {
-                            // element.insert("Ä\nBΩB BB BBBBB\nCCC".into(), cx);
-                            // element.insert("This is just ä Test! Ω≈ Haha.\nOtherwise i need to input this text all the time myself.\nAnd some more.".into(), cx);
-                            element.read_file(
-                                &std::path::PathBuf::from("/Users/philipwagner/Downloads/test.txt"),
-                                cx,
-                            );
-                        }
-
-                        return element;
-                    });
-                    cx.new_view(|cx| TextEditor::new(editor, cx.focus_handle(), cx))
-                },
-            )
-            .unwrap();
-
-        cx.on_keyboard_layout_change({
-            move |cx| {
-                window.update(cx, |_, cx| cx.notify()).ok();
-            }
-        })
-        .detach();
-
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.on_action(|_: &Hide, cx| cx.hide());
         cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
         cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
-        cx.on_action(file_new);
+        cx.on_action(|_: &FileNew, cx| open_window(None, cx));
 
         cx.set_menus(vec![
             Menu {
@@ -198,11 +194,33 @@ fn main() {
             },
         ]);
 
-        window
-            .update(cx, |view, cx| {
-                cx.focus_view(&view.editor);
-                cx.activate(true);
-            })
-            .unwrap();
+        if let Some(urls) = open_rx.try_next().ok().flatten() {
+            for url in urls {
+                open_window(Some(PathBuf::from(url)), cx);
+            }
+        } else {
+            #[cfg(debug_assertions)]
+            {
+                let path = PathBuf::from("/Users/philipwagner/Downloads/test.txt");
+                open_window(Some(path), cx);
+            }
+
+            #[cfg(not(debug_assertions))]
+            {
+                open_window(None, cx);
+            }
+        }
+
+        cx.spawn(move |cx| async move {
+            while let Some(urls) = open_rx.next().await {
+                cx.update(|cx| {
+                    for url in urls {
+                        open_window(Some(PathBuf::from(url)), cx);
+                    }
+                })
+                .ok();
+            }
+        })
+        .detach();
     });
 }
