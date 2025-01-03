@@ -18,15 +18,7 @@ use crate::editor::*;
 use crate::text_input::*;
 use crate::theme_manager::ActiveTheme;
 
-actions!(set_menus, [Quit, Hide, FileNew]);
-
-fn quit(_: &Quit, cx: &mut AppContext) {
-    cx.quit();
-}
-
-fn hide(_: &Hide, cx: &mut AppContext) {
-    cx.hide();
-}
+actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew]);
 
 fn file_new(_: &FileNew, cx: &mut AppContext) {
     let window = cx
@@ -102,6 +94,7 @@ fn main() {
             KeyBinding::new("cmd-s", Save, None),
             KeyBinding::new("shift-cmd-s", SaveAs, None),
             KeyBinding::new("cmd-h", Hide, None),
+            KeyBinding::new("alt-cmd-h", HideOthers, None),
             KeyBinding::new("cmd-n", FileNew, None),
             KeyBinding::new("cmd-w", WindowClose, None),
             KeyBinding::new("cmd-m", Minimize, None),
@@ -151,8 +144,10 @@ fn main() {
         })
         .detach();
 
-        cx.on_action(quit);
-        cx.on_action(hide);
+        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.on_action(|_: &Hide, cx| cx.hide());
+        cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
+        cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
         cx.on_action(file_new);
 
         cx.set_menus(vec![
@@ -162,6 +157,8 @@ fn main() {
                     MenuItem::action("About text...", About),
                     MenuItem::separator(),
                     MenuItem::action("Hide", Hide),
+                    MenuItem::action("Hide Others", HideOthers),
+                    MenuItem::action("Show All", ShowAll),
                     MenuItem::action("Quit", Quit),
                 ],
             },
