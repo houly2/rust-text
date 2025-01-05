@@ -5,6 +5,7 @@ use crate::theme_manager::ActiveTheme;
 use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
 use gpui::*;
+use prelude::FluentBuilder;
 use ropey::*;
 use std::cell::RefCell;
 use std::ops::Range;
@@ -53,7 +54,14 @@ actions!(
 
 type PaintCallback = Box<dyn FnOnce(&mut TextInput, &mut ViewContext<TextInput>)>;
 
+#[derive(PartialEq)]
+pub enum TextInputMode {
+    SingleLine,
+    Full,
+}
+
 pub struct TextInput {
+    mode: TextInputMode,
     pub focus_handle: FocusHandle,
     pub content: Rope,
     pub selected_range: Range<usize>,
@@ -64,6 +72,8 @@ pub struct TextInput {
     pub last_offset: Option<Point<Pixels>>,
     is_selecting: bool,
     is_scroll_dragging: bool,
+
+    pub highlights: Vec<Range<usize>>,
 
     pub blink_manager: Model<BlinkManager>,
     pub scroll_manager: Model<ScrollManager>,
@@ -81,11 +91,12 @@ pub struct TextInput {
     _subscriptions: Vec<Subscription>,
 }
 
+impl EventEmitter<NewLine> for TextInput {}
+
 impl TextInput {
-    pub fn new(cx: &mut ViewContext<Self>) -> Self {
+    pub fn new(mode: TextInputMode, cx: &mut ViewContext<Self>) -> Self {
         let blink_manager = cx.new_model(|_| BlinkManager::new());
         let scroll_manager = cx.new_model(|_| ScrollManager::new());
-
 
         cx.bind_keys([
             KeyBinding::new("enter", NewLine, None),
@@ -123,10 +134,10 @@ impl TextInput {
             KeyBinding::new("shift-cmd-z", Redo, None),
         ]);
 
-
         let focus_handle = cx.focus_handle();
 
         Self {
+            mode,
             focus_handle: focus_handle.clone(),
             content: "".into(),
             selected_range: 0..0,
@@ -137,6 +148,7 @@ impl TextInput {
             last_offset: None,
             is_selecting: false,
             is_scroll_dragging: false,
+            highlights: vec![],
             blink_manager: blink_manager.clone(),
             scroll_manager: scroll_manager.clone(),
             undo_stack: Vec::new(),
@@ -226,11 +238,19 @@ impl TextInput {
     }
 
     fn new_line(&mut self, _: &NewLine, cx: &mut ViewContext<Self>) {
+        cx.emit(NewLine);
+
+        if self.mode != TextInputMode::Full {
+            return;
+        }
         // todo: handle selection
         self.replace_text_in_range(None, "\n", cx);
     }
 
     fn new_line_without_split(&mut self, _: &NewLineWithoutSplit, cx: &mut ViewContext<Self>) {
+        if self.mode != TextInputMode::Full {
+            return;
+        }
         // todo: handle selection
         self.move_to(self.position_for_end_of_line(self.cursor_offset()), cx);
         self.replace_text_in_range(None, "\n", cx);
@@ -750,69 +770,75 @@ impl TextInput {
     pub fn file_path(&self) -> &Option<PathBuf> {
         &self.current_file_path
     }
+
+    pub fn highlight(&mut self, highlights: Vec<Range<usize>>, cx: &mut ViewContext<Self>) {
+        self.highlights = highlights;
+        cx.notify();
+    }
+
+    pub fn clear_highlights(&mut self, cx: &mut ViewContext<Self>) {
+        self.highlights.clear();
+        cx.notify();
+    }
 }
 
 impl Render for TextInput {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
-            .flex()
             .flex_col()
-            .h_full()
+            .bg(cx.theme().editor_background)
+            .line_height(px(28.))
+            .text_size(px(18.))
             .w_full()
+            .when(self.mode == TextInputMode::Full, |el| el.h_full())
+            .when(self.mode == TextInputMode::SingleLine, |el| {
+                el.h(px(28.) + px(8.) + px(8.)).bg(rgb(0x000000))
+            })
+            .overflow_hidden()
             .text_color(cx.theme().editor_text)
             .font_family(cx.settings().font_family)
-            .child(
-                div()
-                    .flex()
-                    .h_full()
-                    .w_full()
-                    .overflow_hidden()
-                    .bg(cx.theme().editor_background)
-                    .line_height(px(28.))
-                    .text_size(px(18.))
-                    .key_context("TextInput")
-                    .track_focus(&self.focus_handle(cx))
-                    .cursor(CursorStyle::IBeam)
-                    .on_action(cx.listener(Self::new_line))
-                    .on_action(cx.listener(Self::new_line_without_split))
-                    .on_action(cx.listener(Self::backspace))
-                    .on_action(cx.listener(Self::delete))
-                    .on_action(cx.listener(Self::left))
-                    .on_action(cx.listener(Self::right))
-                    .on_action(cx.listener(Self::up))
-                    .on_action(cx.listener(Self::down))
-                    .on_action(cx.listener(Self::home))
-                    .on_action(cx.listener(Self::end))
-                    .on_action(cx.listener(Self::select_left))
-                    .on_action(cx.listener(Self::select_right))
-                    .on_action(cx.listener(Self::select_up))
-                    .on_action(cx.listener(Self::select_down))
-                    .on_action(cx.listener(Self::select_all))
-                    .on_action(cx.listener(Self::show_character_palette))
-                    .on_action(cx.listener(Self::copy))
-                    .on_action(cx.listener(Self::paste))
-                    .on_action(cx.listener(Self::cut))
-                    .on_action(cx.listener(Self::move_to_word_start))
-                    .on_action(cx.listener(Self::move_to_word_end))
-                    .on_action(cx.listener(Self::move_to_line_start))
-                    .on_action(cx.listener(Self::move_to_line_end))
-                    .on_action(cx.listener(Self::move_to_doc_start))
-                    .on_action(cx.listener(Self::move_to_doc_end))
-                    .on_action(cx.listener(Self::select_word_start))
-                    .on_action(cx.listener(Self::select_word_end))
-                    .on_action(cx.listener(Self::select_line_start))
-                    .on_action(cx.listener(Self::select_line_end))
-                    .on_action(cx.listener(Self::select_doc_start))
-                    .on_action(cx.listener(Self::select_doc_end))
-                    .on_action(cx.listener(Self::undo))
-                    .on_action(cx.listener(Self::redo))
-                    .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-                    .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
-                    .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
-                    .on_scroll_wheel(cx.listener(Self::on_scroll_wheel))
-                    .on_mouse_move(cx.listener(Self::on_mouse_move))
-                    .child(TextElement::new(cx.view().clone())),
-            )
+            .key_context("TextInput")
+            .track_focus(&self.focus_handle)
+            .cursor(CursorStyle::IBeam)
+            .on_action(cx.listener(Self::new_line))
+            .on_action(cx.listener(Self::new_line_without_split))
+            .on_action(cx.listener(Self::backspace))
+            .on_action(cx.listener(Self::delete))
+            .on_action(cx.listener(Self::left))
+            .on_action(cx.listener(Self::right))
+            .on_action(cx.listener(Self::up))
+            .on_action(cx.listener(Self::down))
+            .on_action(cx.listener(Self::home))
+            .on_action(cx.listener(Self::end))
+            .on_action(cx.listener(Self::select_left))
+            .on_action(cx.listener(Self::select_right))
+            .on_action(cx.listener(Self::select_up))
+            .on_action(cx.listener(Self::select_down))
+            .on_action(cx.listener(Self::select_all))
+            .on_action(cx.listener(Self::show_character_palette))
+            .on_action(cx.listener(Self::copy))
+            .on_action(cx.listener(Self::paste))
+            .on_action(cx.listener(Self::cut))
+            .on_action(cx.listener(Self::move_to_word_start))
+            .on_action(cx.listener(Self::move_to_word_end))
+            .on_action(cx.listener(Self::move_to_line_start))
+            .on_action(cx.listener(Self::move_to_line_end))
+            .on_action(cx.listener(Self::move_to_doc_start))
+            .on_action(cx.listener(Self::move_to_doc_end))
+            .on_action(cx.listener(Self::select_word_start))
+            .on_action(cx.listener(Self::select_word_end))
+            .on_action(cx.listener(Self::select_line_start))
+            .on_action(cx.listener(Self::select_line_end))
+            .on_action(cx.listener(Self::select_doc_start))
+            .on_action(cx.listener(Self::select_doc_end))
+            .on_action(cx.listener(Self::undo))
+            .on_action(cx.listener(Self::redo))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_scroll_wheel(cx.listener(Self::on_scroll_wheel))
+            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .child(TextElement::new(cx.view().clone()))
     }
 }
 
@@ -826,7 +852,7 @@ impl ViewInputHandler for TextInput {
     fn text_for_range(
         &mut self,
         range_utf16: std::ops::Range<usize>,
-        actual_range: &mut Option<std::ops::Range<usize>>,
+        _: &mut Option<std::ops::Range<usize>>,
         _: &mut ViewContext<Self>,
     ) -> Option<String> {
         Some(self.content.slice(range_utf16).to_string())

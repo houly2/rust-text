@@ -6,8 +6,8 @@ use std::{
 use gpui::*;
 
 use crate::{
-    modal_manager::ModalManager, status_bar::StatusBar, text_input::TextInput,
-    theme_selector::ThemeSelector, title_bar::TitleBar,
+    modal_manager::ModalManager, search::SearchView, status_bar::StatusBar, text_input::TextInput,
+    theme_selector::ThemeSelector, title_bar::TitleBar, TextInputMode,
 };
 
 actions!(
@@ -19,7 +19,8 @@ actions!(
         About,
         WindowClose,
         Minimize,
-        ToggleTheme
+        ToggleTheme,
+        Search
     ]
 );
 
@@ -28,6 +29,7 @@ pub struct Editor {
     title_bar: View<TitleBar>,
     status_bar: View<StatusBar>,
     modal_manager: View<ModalManager>,
+    search_view: View<SearchView>,
 }
 
 impl Editor {
@@ -40,18 +42,21 @@ impl Editor {
         });
 
         cx.bind_keys([KeyBinding::new("cmd-t", ToggleTheme, None)]);
+        cx.bind_keys([KeyBinding::new("cmd-f", Search, None)]);
 
         let text_input = cx.new_view(|cx| TextInput::new(TextInputMode::Full, cx));
 
         let weak_handle = text_input.downgrade();
         let title_bar = cx.new_view(|_| TitleBar::new(weak_handle.clone()));
         let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
+        let search_view = cx.new_view(|cx| SearchView::new(weak_handle.clone(), cx));
 
         Self {
             text_input,
             title_bar,
             status_bar,
             modal_manager: cx.new_view(|cx| ModalManager::new(cx)),
+            search_view,
         }
     }
 
@@ -234,6 +239,11 @@ impl Editor {
             modal_layer.toggle_modal(cx, move |cx| ThemeSelector::new(cx))
         });
     }
+
+    fn open_search(&mut self, _: &Search, cx: &mut ViewContext<Self>) {
+        self.search_view
+            .update(cx, |search_view, cx| search_view.show(cx))
+    }
 }
 
 impl Render for Editor {
@@ -251,7 +261,9 @@ impl Render for Editor {
             .on_action(cx.listener(Self::close_window))
             .on_action(cx.listener(Self::about))
             .on_action(cx.listener(Self::toggle_modal))
+            .on_action(cx.listener(Self::open_search))
             .child(self.title_bar.clone())
+            .child(self.search_view.clone())
             .child(self.text_input.clone())
             .child(self.status_bar.clone())
             .child(self.modal_manager.clone())

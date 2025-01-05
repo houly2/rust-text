@@ -11,6 +11,7 @@ mod editor;
 mod lines;
 mod modal_manager;
 mod scroll_manager;
+mod search;
 mod settings_manager;
 mod status_bar;
 mod text_element;

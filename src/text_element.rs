@@ -1,8 +1,11 @@
+use gpui::*;
+use ropey::Rope;
+use smallvec::SmallVec;
+use std::ops::Range;
+
 use crate::lines::Lines;
 use crate::text_input::TextInput;
 use crate::theme_manager::ActiveTheme;
-use gpui::*;
-use smallvec::SmallVec;
 
 pub struct TextElement {
     input: View<TextInput>,
@@ -25,6 +28,151 @@ impl TextElement {
             point(bounds.left() + end.x, bounds.top() + start.y + line_height),
         )
     }
+
+    fn convert_byte_range_to_char_range(
+        &self,
+        range: &Range<usize>,
+        display_text: &Rope,
+    ) -> Range<usize> {
+        Range {
+            start: display_text.byte_to_char(range.start),
+            end: display_text.byte_to_char(range.end),
+        }
+    }
+
+    fn paint_range(
+        &self,
+        range: &Range<usize>,
+        color: Rgba,
+        display_text: &Rope,
+        lines: &Lines,
+        bounds: &Bounds<Pixels>,
+    ) -> Option<Vec<PaintQuad>> {
+        if range.is_empty() {
+            return None;
+        }
+
+        let start_byte_idx = display_text.char_to_byte(range.start);
+        let start_line_idx = display_text.byte_to_line(start_byte_idx);
+        let start_line_byte_idx = display_text.line_to_byte(start_line_idx);
+        let start_byte_idx_in_line = start_byte_idx - start_line_byte_idx;
+        let start_point =
+            lines.position_for_byte_idx_in_line(start_byte_idx_in_line, start_line_idx);
+
+        let end_byte_idx = display_text.char_to_byte(range.end);
+        let end_line_idx = display_text.byte_to_line(end_byte_idx);
+        let end_line_byte_idx = display_text.line_to_byte(end_line_idx);
+        let end_point =
+            lines.position_for_byte_idx_in_line(end_byte_idx - end_line_byte_idx, end_line_idx);
+
+        let visual_line_count: u32 =
+            ((end_point.y - start_point.y) / lines.line_height).round() as u32;
+        let mut selection_quads = Vec::new();
+
+        match visual_line_count {
+            0 => {
+                // Single-line selection
+                selection_quads.push(fill(
+                    self.get_line_selection_bounds(
+                        &bounds,
+                        start_point,
+                        end_point,
+                        lines.line_height,
+                    ),
+                    color,
+                ));
+            }
+            1 => {
+                // Two-line selection
+                let second_line_start = point(px(0.), end_point.y);
+                let first_line_end = lines
+                    .wrapped_line_end_point(start_line_idx, start_byte_idx_in_line)
+                    .unwrap();
+
+                selection_quads.push(fill(
+                    self.get_line_selection_bounds(
+                        &bounds,
+                        start_point,
+                        first_line_end,
+                        lines.line_height,
+                    ),
+                    color,
+                ));
+                selection_quads.push(fill(
+                    self.get_line_selection_bounds(
+                        &bounds,
+                        second_line_start,
+                        end_point,
+                        lines.line_height,
+                    ),
+                    color,
+                ));
+            }
+            _ => {
+                // Multi-line selection
+
+                let mut first = true;
+
+                for line_idx in start_line_idx..=end_line_idx {
+                    let line = lines.line(line_idx).unwrap();
+                    let height = lines.height_till_line_idx(line_idx);
+                    let start_byte_idx_in_line = if first {
+                        start_byte_idx - start_line_byte_idx
+                    } else {
+                        0
+                    };
+                    let end_byte_idx_in_line = end_byte_idx - display_text.line_to_byte(line_idx);
+
+                    let wrapped_lines_end_idx = line
+                        .wrap_boundaries()
+                        .iter()
+                        .map(|wb| {
+                            let run = &line.unwrapped_layout.runs[wb.run_ix];
+                            let glyph = &run.glyphs[wb.glyph_ix];
+                            glyph.index
+                        })
+                        .filter(|byte_idx| {
+                            start_byte_idx_in_line < *byte_idx && end_byte_idx_in_line > *byte_idx
+                        });
+
+                    let mut last_end_idx = 0;
+                    for end_idx in wrapped_lines_end_idx {
+                        let p = line.position_for_index(end_idx, lines.line_height).unwrap();
+                        let pp = point(p.x, p.y + height);
+                        selection_quads.push(fill(
+                            self.get_line_selection_bounds(
+                                &bounds,
+                                point(if first { start_point.x } else { px(0.) }, pp.y),
+                                pp,
+                                lines.line_height,
+                            ),
+                            color,
+                        ));
+                        last_end_idx = end_idx;
+                        first = false;
+                    }
+
+                    if last_end_idx < end_byte_idx_in_line {
+                        let end_idx = end_byte_idx_in_line.min(line.len());
+                        let p = line.position_for_index(end_idx, lines.line_height).unwrap();
+                        let pp = point(p.x, p.y + height);
+                        selection_quads.push(fill(
+                            self.get_line_selection_bounds(
+                                &bounds,
+                                point(if first { start_point.x } else { px(0.) }, pp.y),
+                                pp,
+                                lines.line_height,
+                            ),
+                            color,
+                        ));
+                    }
+
+                    first = false;
+                }
+            }
+        }
+        Some(selection_quads)
+    }
 }
 
 pub struct PrepaintState {
@@ -33,6 +181,7 @@ pub struct PrepaintState {
     lines: Option<Lines>,
     cursor: Option<PaintQuad>,
     selections: Option<Vec<PaintQuad>>,
+    highlights: Option<Vec<PaintQuad>>,
     scroll_bar: Option<SmallVec<[PaintQuad; 2]>>,
     scroll_bar_hitbox: Hitbox,
 }
@@ -142,7 +291,6 @@ impl Element for TextElement {
         let line_height = cx.line_height();
         let lines = Lines::new(lines_raw, line_height);
 
-        let selections: Option<Vec<PaintQuad>>;
         let paint_cursor: Option<PaintQuad>;
         let scroll_bar: Option<SmallVec<[PaintQuad; 2]>>;
 
@@ -173,137 +321,29 @@ impl Element for TextElement {
             paint_cursor = None;
         }
 
-        if selected_range.is_empty() {
-            selections = None;
-        } else {
-            let start_byte_idx = display_text.char_to_byte(selected_range.start);
-            let start_line_idx = display_text.byte_to_line(start_byte_idx);
-            let start_line_byte_idx = display_text.line_to_byte(start_line_idx);
-            let start_byte_idx_in_line = start_byte_idx - start_line_byte_idx;
-            let start_point =
-                lines.position_for_byte_idx_in_line(start_byte_idx_in_line, start_line_idx);
+        let selection_color = cx.theme().selection_bg;
+        let selections = self.paint_range(
+            &selected_range,
+            selection_color,
+            &display_text,
+            &lines,
+            &new_bounds,
+        );
 
-            let end_byte_idx = display_text.char_to_byte(selected_range.end);
-            let end_line_idx = display_text.byte_to_line(end_byte_idx);
-            let end_line_byte_idx = display_text.line_to_byte(end_line_idx);
-            let end_point =
-                lines.position_for_byte_idx_in_line(end_byte_idx - end_line_byte_idx, end_line_idx);
-
-            selections = {
-                let selection_color = cx.theme().selection_bg;
-                let visual_line_count: u32 =
-                    ((end_point.y - start_point.y) / lines.line_height).round() as u32;
-                let mut selection_quads = Vec::new();
-
-                match visual_line_count {
-                    0 => {
-                        // Single-line selection
-                        selection_quads.push(fill(
-                            self.get_line_selection_bounds(
-                                &new_bounds,
-                                start_point,
-                                end_point,
-                                line_height,
-                            ),
-                            selection_color,
-                        ));
-                    }
-                    1 => {
-                        // Two-line selection
-                        let second_line_start = point(px(0.), end_point.y);
-                        let first_line_end = lines
-                            .wrapped_line_end_point(start_line_idx, start_byte_idx_in_line)
-                            .unwrap();
-
-                        selection_quads.push(fill(
-                            self.get_line_selection_bounds(
-                                &new_bounds,
-                                start_point,
-                                first_line_end,
-                                line_height,
-                            ),
-                            selection_color,
-                        ));
-                        selection_quads.push(fill(
-                            self.get_line_selection_bounds(
-                                &new_bounds,
-                                second_line_start,
-                                end_point,
-                                line_height,
-                            ),
-                            selection_color,
-                        ));
-                    }
-                    _ => {
-                        // Multi-line selection
-
-                        let mut first = true;
-
-                        for line_idx in start_line_idx..=end_line_idx {
-                            let line = lines.line(line_idx).unwrap();
-                            let height = lines.height_till_line_idx(line_idx);
-                            let start_byte_idx_in_line = if first {
-                                start_byte_idx - start_line_byte_idx
-                            } else {
-                                0
-                            };
-                            let end_byte_idx_in_line =
-                                end_byte_idx - display_text.line_to_byte(line_idx);
-
-                            let wrapped_lines_end_idx = line
-                                .wrap_boundaries()
-                                .iter()
-                                .map(|wb| {
-                                    let run = &line.unwrapped_layout.runs[wb.run_ix];
-                                    let glyph = &run.glyphs[wb.glyph_ix];
-                                    glyph.index
-                                })
-                                .filter(|byte_idx| {
-                                    start_byte_idx_in_line < *byte_idx
-                                        && end_byte_idx_in_line > *byte_idx
-                                });
-
-                            let mut last_end_idx = 0;
-                            for end_idx in wrapped_lines_end_idx {
-                                let p =
-                                    line.position_for_index(end_idx, lines.line_height).unwrap();
-                                let pp = point(p.x, p.y + height);
-                                selection_quads.push(fill(
-                                    self.get_line_selection_bounds(
-                                        &new_bounds,
-                                        point(if first { start_point.x } else { px(0.) }, pp.y),
-                                        pp,
-                                        line_height,
-                                    ),
-                                    selection_color,
-                                ));
-                                last_end_idx = end_idx;
-                                first = false;
-                            }
-
-                            if last_end_idx < end_byte_idx_in_line {
-                                let end_idx = end_byte_idx_in_line.min(line.len());
-                                let p =
-                                    line.position_for_index(end_idx, lines.line_height).unwrap();
-                                let pp = point(p.x, p.y + height);
-                                selection_quads.push(fill(
-                                    self.get_line_selection_bounds(
-                                        &new_bounds,
-                                        point(if first { start_point.x } else { px(0.) }, pp.y),
-                                        pp,
-                                        line_height,
-                                    ),
-                                    selection_color,
-                                ));
-                            }
-
-                            first = false;
-                        }
-                    }
-                }
-                Some(selection_quads)
-            }
-        }
+        let highlights: Vec<PaintQuad> = input
+            .highlights
+            .iter()
+            .filter_map(|range| {
+                self.paint_range(
+                    &self.convert_byte_range_to_char_range(range, &display_text),
+                    rgb(0x000000),
+                    &display_text,
+                    &lines,
+                    &new_bounds,
+                )
+            })
+            .flatten()
+            .collect();
 
         PrepaintState {
             offset,
@@ -311,6 +351,7 @@ impl Element for TextElement {
             lines: Some(lines),
             cursor: paint_cursor,
             selections,
+            highlights: Some(highlights),
             scroll_bar,
             scroll_bar_hitbox: cx.insert_hitbox(scroll_manager.bounds(&bounds), false),
         }
@@ -335,6 +376,15 @@ impl Element for TextElement {
         cx.with_content_mask(Some(ContentMask { bounds }), |cx| {
             if let Some(selections) = prepaint.selections.take() {
                 for selection in selections {
+                    let mut selection = selection.clone();
+                    selection.bounds.origin.x = prepaint.offset.x + selection.bounds.origin.x;
+                    selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;
+                    cx.paint_quad(selection);
+                }
+            }
+
+            if let Some(highlights) = prepaint.highlights.take() {
+                for selection in highlights {
                     let mut selection = selection.clone();
                     selection.bounds.origin.x = prepaint.offset.x + selection.bounds.origin.x;
                     selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;
