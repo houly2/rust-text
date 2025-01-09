@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui::*;
 use smallvec::{smallvec, SmallVec};
 
-use crate::{lines::Lines, theme_manager::ActiveTheme};
+use crate::{theme_manager::ActiveTheme, views::text_input::lines::Lines};
 
 pub struct ScrollManager {
     show: bool,

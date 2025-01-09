@@ -1,8 +1,5 @@
-use crate::command::{Command, DeleteCommand, InsertCommand};
-use crate::scroll_manager::ScrollManager;
 use crate::settings_manager::CurrentSettings;
 use crate::theme_manager::ActiveTheme;
-use crate::{blink_manager::BlinkManager, lines::Lines, text_element::TextElement};
 
 use gpui::*;
 use prelude::FluentBuilder;
@@ -12,6 +9,12 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
 use unicode_segmentation::*;
+
+use super::blink_manager::BlinkManager;
+use super::command::*;
+use super::lines::Lines;
+use super::scroll_manager::ScrollManager;
+use super::text_element::TextElement;
 
 actions!(
     text_input,

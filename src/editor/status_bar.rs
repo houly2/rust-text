@@ -1,7 +1,9 @@
 use gpui::*;
 
 use crate::{
-    settings_manager::CurrentSettings, theme_manager::ActiveTheme, tooltip::Tooltip, TextInput,
+    settings_manager::CurrentSettings,
+    theme_manager::ActiveTheme,
+    views::{text_input::text_input::TextInput, tooltip::Tooltip},
 };
 
 pub struct StatusBar {

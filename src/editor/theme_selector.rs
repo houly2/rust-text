@@ -2,10 +2,11 @@ use gpui::*;
 use prelude::FluentBuilder;
 
 use crate::{
-    modal_manager::ModalView,
     settings_manager::CurrentSettings,
     theme_manager::{ActiveTheme, Theme},
 };
+
+use super::modal_manager::ModalView;
 
 actions!(modal, [Up, Down, Select, Close]);
 

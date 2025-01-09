@@ -3,9 +3,9 @@ use ropey::Rope;
 use smallvec::SmallVec;
 use std::ops::Range;
 
-use crate::lines::Lines;
-use crate::text_input::TextInput;
 use crate::theme_manager::ActiveTheme;
+
+use super::{lines::Lines, text_input::TextInput};
 
 pub struct TextElement {
     input: View<TextInput>,

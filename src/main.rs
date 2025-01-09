@@ -1,28 +1,17 @@
+use editor::editor::*;
 use futures::channel::mpsc;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use gpui::*;
 use settings_manager::SettingsManager;
 use std::path::PathBuf;
+use views::text_input::text_input::*;
 
-mod blink_manager;
-mod command;
 mod editor;
-mod lines;
-mod modal_manager;
-mod scroll_manager;
-mod search;
 mod settings_manager;
-mod status_bar;
-mod text_element;
-mod text_input;
 mod theme_manager;
-mod theme_selector;
-mod title_bar;
-mod tooltip;
+mod views;
 
-use crate::editor::*;
-use crate::text_input::*;
 use crate::theme_manager::ActiveTheme;
 
 actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew]);

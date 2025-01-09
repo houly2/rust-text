@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use gpui::*;
 
-use crate::{settings_manager::CurrentSettings, theme_manager::ActiveTheme, TextInput};
+use crate::{
+    settings_manager::CurrentSettings, theme_manager::ActiveTheme,
+    views::text_input::text_input::TextInput,
+};
 
 pub struct TitleBar {
     text_input: WeakView<TextInput>,

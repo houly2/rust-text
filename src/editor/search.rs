@@ -3,7 +3,7 @@ use std::ops::Range;
 use aho_corasick::AhoCorasickBuilder;
 use gpui::*;
 
-use crate::{NewLine, TextInput, TextInputMode};
+use crate::views::text_input::text_input::{NewLine, TextInput, TextInputMode};
 
 actions!(search, [Close]);
 
@@ -116,6 +116,8 @@ impl Render for SearchView {
         }
 
         div()
+            .flex()
+            .flex_row()
             .key_context("search")
             .on_action(cx.listener(Self::close))
             .child(self.view.clone())
