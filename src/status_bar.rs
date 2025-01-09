@@ -1,6 +1,8 @@
 use gpui::*;
 
-use crate::{settings_manager::CurrentSettings, theme_manager::ActiveTheme, TextInput};
+use crate::{
+    settings_manager::CurrentSettings, theme_manager::ActiveTheme, tooltip::Tooltip, TextInput,
+};
 
 pub struct StatusBar {
     text_input: WeakView<TextInput>,
@@ -99,7 +101,8 @@ impl Render for StatusBar {
                     .on_click(cx.listener(Self::toggle_soft_wrap))
                     .child(self.soft_wrap_status(cx))
                     .cursor(CursorStyle::PointingHand)
-                    .hover(|style| style.rounded(px(6.)).bg(cx.theme().hover_bg)),
+                    .hover(|style| style.rounded(px(6.)).bg(cx.theme().hover_bg))
+                    .tooltip(|cx| Tooltip::text("Toggle Soft Wrap", cx)),
             )
             .child(div().flex_grow())
             .child(self.selection_format(cx))

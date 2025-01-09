@@ -19,6 +19,7 @@ mod text_input;
 mod theme_manager;
 mod theme_selector;
 mod title_bar;
+mod tooltip;
 
 use crate::editor::*;
 use crate::text_input::*;
