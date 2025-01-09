@@ -750,13 +750,7 @@ impl TextInput {
         self.selected_range = range.clone();
         self.marked_range.take();
         self.blink_manager.update(cx, BlinkManager::pause);
-
-        let scroll_position = range.start;
-        let epoch = self
-            .scroll_manager
-            .update(cx, |this, _| this.next_calc_epoch());
-        self.on_next_paint(move |this, cx| this.update_scroll_manager(epoch, scroll_position, cx));
-
+        self.update_scroll_on_next_paint(range.start, cx);
         cx.notify();
     }
 
@@ -774,12 +768,15 @@ impl TextInput {
 
     pub fn set_soft_wrap(&mut self, enabled: bool, cx: &mut ViewContext<Self>) {
         self.settings_soft_wrap = enabled;
-        let scroll_position = self.cursor_offset();
+        self.update_scroll_on_next_paint(self.cursor_offset(), cx);
+        cx.notify();
+    }
+
+    fn update_scroll_on_next_paint(&mut self, position: usize, cx: &mut ViewContext<Self>) {
         let epoch = self
             .scroll_manager
             .update(cx, |this, _| this.next_calc_epoch());
-        self.on_next_paint(move |this, cx| this.update_scroll_manager(epoch, scroll_position, cx));
-        cx.notify();
+        self.on_next_paint(move |this, cx| this.update_scroll_manager(epoch, position, cx));
     }
 
     pub fn soft_wrap_enabled(&self) -> bool {
