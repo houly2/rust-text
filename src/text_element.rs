@@ -374,8 +374,8 @@ impl Element for TextElement {
         let lines = prepaint.lines.take().unwrap();
 
         cx.with_content_mask(Some(ContentMask { bounds }), |cx| {
-            if let Some(selections) = prepaint.selections.take() {
-                for selection in selections {
+            if let Some(highlights) = prepaint.highlights.take() {
+                for selection in highlights {
                     let mut selection = selection.clone();
                     selection.bounds.origin.x = prepaint.offset.x + selection.bounds.origin.x;
                     selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;
@@ -383,8 +383,8 @@ impl Element for TextElement {
                 }
             }
 
-            if let Some(highlights) = prepaint.highlights.take() {
-                for selection in highlights {
+            if let Some(selections) = prepaint.selections.take() {
+                for selection in selections {
                     let mut selection = selection.clone();
                     selection.bounds.origin.x = prepaint.offset.x + selection.bounds.origin.x;
                     selection.bounds.origin.y = prepaint.offset.y + selection.bounds.origin.y;

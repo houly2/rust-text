@@ -216,7 +216,7 @@ impl TextInput {
         if let Some(command) = self.undo_stack.pop() {
             let prev_selection = command.undo(&mut self.content);
             self.redo_stack.push(command);
-            self.update_selected_range(prev_selection, cx);
+            self.update_selected_range(&prev_selection, cx);
         }
     }
 
@@ -224,7 +224,7 @@ impl TextInput {
         if let Some(command) = self.redo_stack.pop() {
             let new_selection = command.execute(&mut self.content);
             self.undo_stack.push(command);
-            self.update_selected_range(new_selection, cx);
+            self.update_selected_range(&new_selection, cx);
         }
     }
 
@@ -477,7 +477,11 @@ impl TextInput {
         }
     }
 
-    fn select_all(&mut self, _: &SelectAll, cx: &mut ViewContext<Self>) {
+    fn select_all_handler(&mut self, _: &SelectAll, cx: &mut ViewContext<Self>) {
+        self.select_all(cx);
+    }
+
+    pub fn select_all(&mut self, cx: &mut ViewContext<Self>) {
         self.move_to(0, cx);
         self.select_to(self.content.len_chars(), cx);
     }
@@ -742,11 +746,30 @@ impl TextInput {
         }
     }
 
-    fn update_selected_range(&mut self, range: Range<usize>, cx: &mut ViewContext<Self>) {
-        self.selected_range = range;
+    fn update_selected_range(&mut self, range: &Range<usize>, cx: &mut ViewContext<Self>) {
+        self.selected_range = range.clone();
         self.marked_range.take();
         self.blink_manager.update(cx, BlinkManager::pause);
+
+        let scroll_position = range.start;
+        let epoch = self
+            .scroll_manager
+            .update(cx, |this, _| this.next_calc_epoch());
+        self.on_next_paint(move |this, cx| this.update_scroll_manager(epoch, scroll_position, cx));
+
         cx.notify();
+    }
+
+    pub fn update_selected_range_bytes(
+        &mut self,
+        range: &Range<usize>,
+        cx: &mut ViewContext<Self>,
+    ) {
+        let new_range = Range {
+            start: self.content.byte_to_char(range.start),
+            end: self.content.byte_to_char(range.end),
+        };
+        self.update_selected_range(&new_range, cx);
     }
 
     pub fn set_soft_wrap(&mut self, enabled: bool, cx: &mut ViewContext<Self>) {
@@ -814,7 +837,7 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::select_up))
             .on_action(cx.listener(Self::select_down))
-            .on_action(cx.listener(Self::select_all))
+            .on_action(cx.listener(Self::select_all_handler))
             .on_action(cx.listener(Self::show_character_palette))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(Self::paste))
@@ -911,11 +934,7 @@ impl ViewInputHandler for TextInput {
         }
 
         let l = text.chars().count();
-        self.update_selected_range(range.start + l..range.start + l, cx);
-        let epoch = self
-            .scroll_manager
-            .update(cx, |this, _| this.next_calc_epoch());
-        self.on_next_paint(move |this, cx| this.update_scroll_manager(epoch, range.start + l, cx));
+        self.update_selected_range(&(range.start + l..range.start + l), cx);
     }
 
     fn replace_and_mark_text_in_range(
