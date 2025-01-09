@@ -774,6 +774,11 @@ impl TextInput {
 
     pub fn set_soft_wrap(&mut self, enabled: bool, cx: &mut ViewContext<Self>) {
         self.settings_soft_wrap = enabled;
+        let scroll_position = self.cursor_offset();
+        let epoch = self
+            .scroll_manager
+            .update(cx, |this, _| this.next_calc_epoch());
+        self.on_next_paint(move |this, cx| this.update_scroll_manager(epoch, scroll_position, cx));
         cx.notify();
     }
 
