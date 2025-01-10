@@ -4,6 +4,7 @@ use prelude::FluentBuilder;
 use crate::{
     settings_manager::CurrentSettings,
     theme_manager::{ActiveTheme, Theme},
+    views::icons::Icons,
 };
 
 use super::modal_manager::ModalView;
@@ -97,12 +98,19 @@ impl Render for ThemeSelector {
                     .child(
                         div()
                             .flex()
-                            .gap_4()
-                            .child(if cx.theme().id == theme.id {
-                                "◉"
-                            } else {
-                                "○"
-                            })
+                            .gap_2()
+                            .items_center()
+                            .child(
+                                svg()
+                                    .size(px(12.))
+                                    .flex_none()
+                                    .path(if cx.theme().id == theme.id {
+                                        Icons::RadioButtonChecked.path()
+                                    } else {
+                                        Icons::RadioButton.path()
+                                    })
+                                    .text_color(cx.theme().editor_text),
+                            )
                             .child(theme.id.to_string())
                             .child(match theme.mode {
                                 crate::theme_manager::ThemeMode::Light => "Light",

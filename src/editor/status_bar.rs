@@ -3,7 +3,7 @@ use gpui::*;
 use crate::{
     settings_manager::CurrentSettings,
     theme_manager::ActiveTheme,
-    views::{text_input::text_input::TextInput, tooltip::Tooltip},
+    views::{icons::Icons, text_input::text_input::TextInput, tooltip::Tooltip},
 };
 
 pub struct StatusBar {
@@ -25,21 +25,11 @@ impl StatusBar {
         });
     }
 
-    fn soft_wrap_status(&self, cx: &mut ViewContext<Self>) -> String {
+    fn soft_wrap_status(&self, cx: &mut ViewContext<Self>) -> bool {
         let Some(text_input) = self.text_input.upgrade() else {
-            return "".to_string();
+            return false;
         };
-
-        let text_input = text_input.read(cx);
-
-        format!(
-            "{} Wrap",
-            if text_input.soft_wrap_enabled() {
-                "◉"
-            } else {
-                "○"
-            }
-        )
+        text_input.read(cx).soft_wrap_enabled()
     }
 
     fn selection_format(&self, cx: &mut ViewContext<Self>) -> String {
@@ -101,7 +91,25 @@ impl Render for StatusBar {
                     .px(px(4.))
                     .id("soft_wrap")
                     .on_click(cx.listener(Self::toggle_soft_wrap))
-                    .child(self.soft_wrap_status(cx))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                svg()
+                                    .size(px(10.))
+                                    .flex_none()
+                                    .path(if self.soft_wrap_status(cx) {
+                                        Icons::RadioButtonChecked.path()
+                                    } else {
+                                        Icons::RadioButton.path()
+                                    })
+                                    .text_color(cx.theme().editor_text),
+                            )
+                            .child("Wrap"),
+                    )
                     .cursor(CursorStyle::PointingHand)
                     .hover(|style| style.rounded(px(6.)).bg(cx.theme().hover_bg))
                     .tooltip(|cx| Tooltip::text("Toggle Soft Wrap", cx)),

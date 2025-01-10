@@ -8,6 +8,8 @@ use super::icon_button::IconButton;
 pub enum Icons {
     Close,
     CharacterSentenceCase,
+    RadioButton,
+    RadioButtonChecked,
 }
 
 impl Icons {
