@@ -23,6 +23,7 @@ pub struct Theme {
     pub scroll_bar_border: Rgba,
     pub scroll_bar_handle_bg: Rgba,
     pub scroll_bar_cursor_highlight: Rgba,
+    pub error: Rgba,
 }
 
 #[derive(Clone)]
@@ -46,6 +47,7 @@ impl ThemeManager {
             scroll_bar_border: rgba(0x2e2e4d66),
             scroll_bar_handle_bg: rgba(0xaeaecd44),
             scroll_bar_cursor_highlight: rgba(0x89b4fadd),
+            error: rgb(0xf38ba8),
         };
 
         let other_theme = Theme {
@@ -61,6 +63,7 @@ impl ThemeManager {
             scroll_bar_border: rgb(0x9ca0b0),
             scroll_bar_handle_bg: rgb(0x5c5f77),
             scroll_bar_cursor_highlight: rgb(0xd20f39),
+            error: rgb(0xd20f39),
         };
 
         Self {

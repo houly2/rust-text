@@ -1,6 +1,3 @@
-use crate::settings_manager::CurrentSettings;
-use crate::theme_manager::ActiveTheme;
-
 use gpui::*;
 use prelude::FluentBuilder;
 use ropey::*;
@@ -814,17 +811,12 @@ impl Render for TextInput {
     fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
             .flex_col()
-            .bg(cx.theme().editor_background)
-            .line_height(px(28.))
-            .text_size(px(18.))
             .w_full()
             .when(self.mode == TextInputMode::Full, |el| el.h_full())
             .when(self.mode == TextInputMode::SingleLine, |el| {
-                el.h(px(28.) + px(8.) + px(8.)).bg(rgb(0x000000))
+                el.h(px(28.) + px(8.) + px(8.))
             })
             .overflow_hidden()
-            .text_color(cx.theme().editor_text)
-            .font_family(cx.settings().font_family)
             .key_context("TextInput")
             .track_focus(&self.focus_handle)
             .cursor(CursorStyle::IBeam)

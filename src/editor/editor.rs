@@ -5,7 +5,11 @@ use std::{
 
 use gpui::*;
 
-use crate::views::text_input::text_input::{TextInput, TextInputMode};
+use crate::{
+    settings_manager::CurrentSettings,
+    theme_manager::ActiveTheme,
+    views::text_input::text_input::{TextInput, TextInputMode},
+};
 
 use super::{
     modal_manager::ModalManager, search::SearchView, status_bar::StatusBar,
@@ -266,7 +270,17 @@ impl Render for Editor {
             .on_action(cx.listener(Self::open_search))
             .child(self.title_bar.clone())
             .child(self.search_view.clone())
-            .child(self.text_input.clone())
+            .child(
+                div()
+                    .h_full()
+                    .w_full()
+                    .bg(cx.theme().editor_background)
+                    .line_height(px(28.))
+                    .text_size(px(18.))
+                    .text_color(cx.theme().editor_text)
+                    .font_family(cx.settings().font_family)
+                    .child(self.text_input.clone()),
+            )
             .child(self.status_bar.clone())
             .child(self.modal_manager.clone())
     }

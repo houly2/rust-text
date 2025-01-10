@@ -1,3 +1,4 @@
+use assets::Assets;
 use editor::editor::*;
 use futures::channel::mpsc;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -7,6 +8,7 @@ use settings_manager::SettingsManager;
 use std::path::PathBuf;
 use views::text_input::text_input::*;
 
+mod assets;
 mod editor;
 mod settings_manager;
 mod theme_manager;
@@ -109,7 +111,7 @@ impl OpenListener {
 }
 
 fn main() {
-    let app = App::new();
+    let app = App::new().with_assets(Assets {});
 
     let (open_listener, mut open_rx) = OpenListener::new();
 

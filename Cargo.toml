@@ -11,6 +11,8 @@ ropey = "1.6.1"
 smallvec = "1.13.2"
 futures = "0.3.31"
 aho-corasick = "1.1.3"
+rust-embed = "8.5.0"
+strum = { version = "0.26", features = ["derive"] }
 
 # https://crates.io/crates/cargo-packager
 [package.metadata.packager]
