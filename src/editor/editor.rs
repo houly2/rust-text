@@ -61,7 +61,7 @@ impl Editor {
             text_input,
             title_bar,
             status_bar,
-            modal_manager: cx.new_view(|cx| ModalManager::new(cx)),
+            modal_manager: cx.new_view(ModalManager::new),
             search_view,
         }
     }
@@ -131,7 +131,7 @@ impl Editor {
         if let Ok(new_content) = fs::read_to_string(path) {
             self.text_input.update(cx, |this, cx| {
                 this.set_file_path(path.into(), cx);
-                this.insert(new_content.into(), cx);
+                this.insert(new_content, cx);
                 this.mark_dirty(false, cx);
                 this.move_to(0, cx);
             });
@@ -182,7 +182,7 @@ impl Editor {
         callback: impl FnOnce(WeakView<Self>, Option<&PathBuf>, AsyncWindowContext) + 'static,
         cx: &mut ViewContext<Self>,
     ) {
-        let path = cx.prompt_for_new_path(Path::new("").into());
+        let path = cx.prompt_for_new_path(Path::new(""));
 
         cx.spawn(|weak_view, cx| async move {
             match Flatten::flatten(path.await.map_err(|e| e.into())) {
@@ -195,9 +195,9 @@ impl Editor {
     }
 
     fn about(&mut self, _: &About, cx: &mut ViewContext<Self>) {
-        let message = format!("text");
-        let detail = format!("a little #DecemberAdventure text editor");
-        let prompt = cx.prompt(PromptLevel::Info, &message, Some(&detail), &["Ok"]);
+        let message = "text";
+        let detail = "a little #DecemberAdventure text editor";
+        let prompt = cx.prompt(PromptLevel::Info, message, Some(detail), &["Ok"]);
         cx.foreground_executor()
             .spawn(async { prompt.await.ok() })
             .detach();
@@ -221,8 +221,8 @@ impl Editor {
             let detail = "Data will be lost";
             let prompt = cx.prompt(
                 PromptLevel::Info,
-                &message,
-                Some(&detail),
+                message,
+                Some(detail),
                 &["Save", "Don't Save", "Abort"],
             );
             cx.spawn(|this, mut cx| async move {
@@ -232,7 +232,7 @@ impl Editor {
                         cx.remove_window();
                     }),
                     Some(1) => this.update(&mut cx, |_, cx| cx.remove_window()),
-                    Some(2) | Some(3_usize..) | None => Ok({}),
+                    Some(2) | Some(3_usize..) | None => Ok(()),
                 }
             })
             .detach();
@@ -242,7 +242,7 @@ impl Editor {
 
     fn toggle_modal(&mut self, _: &ToggleTheme, cx: &mut ViewContext<Self>) {
         self.modal_manager.update(cx, |modal_layer, cx| {
-            modal_layer.toggle_modal(cx, move |cx| ThemeSelector::new(cx))
+            modal_layer.toggle_modal(cx, ThemeSelector::new)
         });
     }
 

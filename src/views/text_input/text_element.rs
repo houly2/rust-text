@@ -74,7 +74,7 @@ impl TextElement {
                 // Single-line selection
                 selection_quads.push(fill(
                     self.get_line_selection_bounds(
-                        &bounds,
+                        bounds,
                         start_point,
                         end_point,
                         lines.line_height,
@@ -91,7 +91,7 @@ impl TextElement {
 
                 selection_quads.push(fill(
                     self.get_line_selection_bounds(
-                        &bounds,
+                        bounds,
                         start_point,
                         first_line_end,
                         lines.line_height,
@@ -100,7 +100,7 @@ impl TextElement {
                 ));
                 selection_quads.push(fill(
                     self.get_line_selection_bounds(
-                        &bounds,
+                        bounds,
                         second_line_start,
                         end_point,
                         lines.line_height,
@@ -141,7 +141,7 @@ impl TextElement {
                         let pp = point(p.x, p.y + height);
                         selection_quads.push(fill(
                             self.get_line_selection_bounds(
-                                &bounds,
+                                bounds,
                                 point(if first { start_point.x } else { px(0.) }, pp.y),
                                 pp,
                                 lines.line_height,
@@ -158,7 +158,7 @@ impl TextElement {
                         let pp = point(p.x, p.y + height);
                         selection_quads.push(fill(
                             self.get_line_selection_bounds(
-                                &bounds,
+                                bounds,
                                 point(if first { start_point.x } else { px(0.) }, pp.y),
                                 pp,
                                 lines.line_height,
@@ -291,9 +291,6 @@ impl Element for TextElement {
         let line_height = cx.line_height();
         let lines = Lines::new(lines_raw, line_height);
 
-        let paint_cursor: Option<PaintQuad>;
-        let scroll_bar: Option<SmallVec<[PaintQuad; 2]>>;
-
         let line_idx = display_text.char_to_line(cursor);
         let line_byte_idx = display_text.line_to_byte(line_idx);
         let cursor_byte_idx = display_text.char_to_byte(cursor);
@@ -302,12 +299,12 @@ impl Element for TextElement {
 
         let scroll_manager = input.scroll_manager.read(cx);
         let offset = scroll_manager.offset;
-        scroll_bar = input.scroll_manager.read_with(cx, |this, cx| {
+        let scroll_bar = input.scroll_manager.read_with(cx, |this, cx| {
             this.paint_bar(&bounds, lines.height(), cursor_pos, cx)
         });
 
-        if input.blink_manager.read(cx).show() {
-            paint_cursor = Some(fill(
+        let paint_cursor = if input.blink_manager.read(cx).show() {
+            Some(fill(
                 Bounds::new(
                     point(
                         new_bounds.left() + cursor_pos.x,
@@ -318,8 +315,8 @@ impl Element for TextElement {
                 cx.theme().cursor,
             ))
         } else {
-            paint_cursor = None;
-        }
+            None
+        };
 
         let selection_color = cx.theme().selection_bg;
         let selections = self.paint_range(

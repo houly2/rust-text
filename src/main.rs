@@ -43,7 +43,7 @@ fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
                         element.read_file(&path, cx);
                     }
 
-                    return element;
+                    element
                 });
                 cx.new_view(|cx| TextEditor::new(editor, cx.focus_handle(), cx))
             },

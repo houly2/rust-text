@@ -441,7 +441,7 @@ impl TextInput {
             return self.position_for_end_of_line(line);
         }
 
-        return 0;
+        0
     }
 
     fn on_scroll_wheel(&mut self, event: &ScrollWheelEvent, cx: &mut ViewContext<Self>) {
@@ -705,7 +705,7 @@ impl TextInput {
             .find_map(|(idx, _)| (idx < c).then_some(idx))
             .unwrap_or(0);
 
-        return self.content.byte_to_char(t);
+        self.content.byte_to_char(t)
     }
 
     fn end_of_word(&self, offset: usize) -> usize {
@@ -727,7 +727,7 @@ impl TextInput {
             .find_map(|(idx, word)| (idx <= c).then_some(idx + word.len()))
             .unwrap_or(0);
 
-        return self.content.byte_to_char(t);
+        self.content.byte_to_char(t)
     }
 
     fn previous_boundary(&self, offset: usize) -> usize {

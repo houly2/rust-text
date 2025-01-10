@@ -46,7 +46,7 @@ impl CurrentSettings for AppContext {
     }
 
     fn themes(&self) -> &SmallVec<[Theme; 2]> {
-        &self.global::<ThemeManager>().themes()
+        self.global::<ThemeManager>().themes()
     }
 
     fn change_theme(&mut self, new_theme: &Theme) {

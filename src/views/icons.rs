@@ -12,7 +12,7 @@ pub enum Icons {
 
 impl Icons {
     pub fn path(&self) -> impl Into<SharedString> {
-        format!("icons/{}.svg", self.to_string())
+        format!("icons/{}.svg", self)
     }
 
     pub fn as_button(&self, active: bool) -> impl IntoElement {

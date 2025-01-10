@@ -103,14 +103,11 @@ impl Render for ThemeSelector {
                             } else {
                                 "○"
                             })
-                            .child(format!("{}", theme.id))
-                            .child(format!(
-                                "{}",
-                                match theme.mode {
-                                    crate::theme_manager::ThemeMode::Light => "Light",
-                                    crate::theme_manager::ThemeMode::Dark => "Dark",
-                                }
-                            )),
+                            .child(theme.id.to_string())
+                            .child(match theme.mode {
+                                crate::theme_manager::ThemeMode::Light => "Light",
+                                crate::theme_manager::ThemeMode::Dark => "Dark",
+                            }),
                     )
             }))
     }
