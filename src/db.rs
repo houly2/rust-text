@@ -66,8 +66,7 @@ impl DB {
         let connection = Connection::open(db_file)?;
 
         Self::migrate(&connection)?;
-
-        // todo: cleanup
+        Self::cleanup(&connection)?;
 
         let this = Self {
             connection: Arc::new(connection),
@@ -132,6 +131,17 @@ impl DB {
                 origin_x = ?3, origin_y = ?4, size_width = ?5, size_height = ?6", params![file_path_str, display_id, origin_x, origin_y, size_width, size_height]);
     }
 
+    fn cleanup(connection: &Connection) -> Result<()> {
+        connection.execute_batch(
+            "
+            DELETE FROM window_positions WHERE created_at > datetime('now', '-6 month');
+            DELETE FROM file_settings WHERE created_at > datetime('now', '-6 month');
+            ",
+        )?;
+
+        Ok(())
+    }
+
     fn migrate(connection: &Connection) -> Result<()> {
         _ = connection.execute(
             "CREATE TABLE IF NOT EXISTS migrations (
@@ -180,10 +190,6 @@ pub trait DbConnection {
 }
 
 impl DbConnection for AppContext {
-    // fn window_position(&self, file_path: PathBuf) -> Option<WindowPosition> {
-    //     self.global::<DB>().window_position(file_path)
-    // }
-
     fn db_connection(&self) -> &DB {
         self.global::<DB>()
     }
