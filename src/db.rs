@@ -172,8 +172,8 @@ impl DB {
     fn cleanup(connection: &Connection) -> Result<()> {
         connection.execute_batch(
             "
-            DELETE FROM window_positions WHERE created_at > datetime('now', '-6 month');
-            DELETE FROM file_settings WHERE created_at > datetime('now', '-6 month');
+            DELETE FROM window_positions WHERE created_at < datetime('now', '-6 month');
+            DELETE FROM file_settings WHERE created_at < datetime('now', '-6 month');
             ",
         )?;
 
