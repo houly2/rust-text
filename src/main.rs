@@ -16,7 +16,7 @@ mod views;
 
 use crate::theme_manager::ActiveTheme;
 
-actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew]);
+actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew, Open]);
 
 fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
     let window = cx
@@ -56,6 +56,31 @@ fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
             cx.activate(true);
         })
         .unwrap();
+}
+
+fn open_file(cx: &mut AppContext) {
+    let paths = cx.prompt_for_paths(PathPromptOptions {
+        files: true,
+        directories: false,
+        multiple: false,
+    });
+
+    cx.spawn(|cx| async move {
+        match Flatten::flatten(paths.await.map_err(|e| e.into())) {
+            Ok(Some(paths)) => {
+                if let Some(path) = paths.first() {
+                    cx.update(|cx| {
+                        cx.add_recent_document(path);
+                        open_window(Some(path.to_path_buf()), cx);
+                    })
+                    .ok();
+                }
+            }
+            Ok(None) => {}
+            Err(_) => {}
+        }
+    })
+    .detach();
 }
 
 struct TextEditor {
@@ -138,6 +163,7 @@ fn main() {
         cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
         cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
         cx.on_action(|_: &FileNew, cx| open_window(None, cx));
+        cx.on_action(|_: &Open, cx| open_file(cx));
 
         cx.set_menus(vec![
             Menu {

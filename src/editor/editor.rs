@@ -1,11 +1,13 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use gpui::*;
 
 use crate::{
+    db::DbConnection,
     settings_manager::CurrentSettings,
     theme_manager::ActiveTheme,
     views::text_input::text_input::{TextInput, TextInputMode},
@@ -19,7 +21,6 @@ use super::{
 actions!(
     set_menus,
     [
-        Open,
         Save,
         SaveAs,
         About,
@@ -106,27 +107,6 @@ impl Editor {
         );
     }
 
-    fn open(&mut self, _: &Open, cx: &mut ViewContext<Self>) {
-        self.prompt_for_path(
-            |this, path, mut cx| {
-                if let Some(path) = path {
-                    cx.update(|cx| {
-                        cx.add_recent_document(path);
-                        if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| {
-                                this.read_file(path, cx);
-                            });
-                        }
-                    })
-                    .ok();
-                } else {
-                    // todo: handle
-                }
-            },
-            cx,
-        );
-    }
-
     pub fn read_file(&mut self, path: &PathBuf, cx: &mut ViewContext<Self>) {
         if let Ok(new_content) = fs::read_to_string(path) {
             self.text_input.update(cx, |this, cx| {
@@ -148,33 +128,6 @@ impl Editor {
         }
 
         cx.notify();
-    }
-
-    fn prompt_for_path(
-        &self,
-        callback: impl FnOnce(WeakView<Self>, Option<&PathBuf>, AsyncWindowContext) + 'static,
-        cx: &mut ViewContext<Self>,
-    ) {
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-        });
-
-        cx.spawn(|weak_view, cx| async move {
-            match Flatten::flatten(paths.await.map_err(|e| e.into())) {
-                Ok(Some(paths)) => {
-                    if let Some(path) = paths.first() {
-                        callback(weak_view, Some(path), cx)
-                    } else {
-                        callback(weak_view, None, cx)
-                    }
-                }
-                Ok(None) => callback(weak_view, None, cx),
-                Err(_) => callback(weak_view, None, cx),
-            }
-        })
-        .detach();
     }
 
     fn prompt_for_new_path(
@@ -260,7 +213,6 @@ impl Render for Editor {
             .h_full()
             .w_full()
             .key_context("Editor")
-            .on_action(cx.listener(Self::open))
             .on_action(cx.listener(Self::save_handler))
             .on_action(cx.listener(Self::save_as_handler))
             .on_action(cx.listener(Self::minimize))
