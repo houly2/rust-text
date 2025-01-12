@@ -153,18 +153,25 @@ impl Editor {
                 this.insert(new_content, cx);
                 this.mark_dirty(false, cx);
                 this.move_to(0, cx);
+
+                if let Some(settings) = cx.db_connection().path_settings(path) {
+                    this.set_soft_wrap(settings.word_wrap, cx);
+                }
             });
         }
     }
 
     fn save_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
         let text_input = self.text_input.read(cx);
-        match fs::write(path, text_input.content.to_string()) {
+        match fs::write(path.clone(), text_input.content.to_string()) {
             Ok(_) => self
                 .text_input
                 .update(cx, |this, cx| this.mark_dirty(false, cx)),
             Err(error) => println!("{:?}", error),
         }
+
+        cx.db_connection()
+            .update_path_settings(&path, self.text_input.read(cx).soft_wrap_enabled());
 
         cx.notify();
     }

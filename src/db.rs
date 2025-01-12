@@ -59,6 +59,11 @@ pub struct WindowPosition {
     pub bounds: Bounds<f32>,
 }
 
+#[derive(Debug)]
+pub struct PathSettings {
+    pub word_wrap: bool,
+}
+
 impl DB {
     pub fn register_global(cx: &mut AppContext) -> Result<()> {
         let app_data_path = app_data_path()?;
@@ -124,11 +129,44 @@ impl DB {
             0: bounds.size.height,
         };
 
-        _ = self.connection.execute("INSERT INTO window_positions (file_path, display_id, origin_x, origin_y, size_width, size_height)
+        _ = self.connection.execute("
+            INSERT INTO window_positions (file_path, display_id, origin_x, origin_y, size_width, size_height)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
             ON CONFLICT DO
-            UPDATE SET
-                origin_x = ?3, origin_y = ?4, size_width = ?5, size_height = ?6", params![file_path_str, display_id, origin_x, origin_y, size_width, size_height]);
+            UPDATE SET origin_x = ?3, origin_y = ?4, size_width = ?5, size_height = ?6
+            ", params![file_path_str, display_id, origin_x, origin_y, size_width, size_height]);
+    }
+
+    pub fn path_settings(&self, file_path: &PathBuf) -> Option<PathSettings> {
+        let file_path_str = file_path.to_str()?;
+
+        self.connection
+            .query_row(
+                "SELECT word_wrap FROM file_settings WHERE file_path = ?1",
+                params![file_path_str],
+                |row| {
+                    Ok(PathSettings {
+                        word_wrap: row.get(0)?,
+                    })
+                },
+            )
+            .ok()
+    }
+
+    pub fn update_path_settings(&self, file_path: &PathBuf, word_wrap: bool) {
+        let Some(file_path_str) = file_path.to_str() else {
+            return;
+        };
+
+        _ = self.connection.execute(
+            "
+            INSERT INTO file_settings (file_path, word_wrap)
+            VALUES (?1, ?2)
+            ON CONFLICT DO
+            UPDATE SET word_wrap = ?2
+            ",
+            params![file_path_str, word_wrap],
+        );
     }
 
     fn cleanup(connection: &Connection) -> Result<()> {
