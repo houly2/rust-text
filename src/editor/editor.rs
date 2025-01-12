@@ -37,6 +37,8 @@ pub struct Editor {
     status_bar: View<StatusBar>,
     modal_manager: View<ModalManager>,
     search_view: View<SearchView>,
+    bounds_save_task_queue: Option<Task<()>>,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl Editor {
@@ -58,12 +60,49 @@ impl Editor {
         let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
         let search_view = cx.new_view(|cx| SearchView::new(weak_handle.clone(), cx));
 
+        let _subscriptions = vec![cx.observe_window_bounds(|this, cx| {
+            if this.bounds_save_task_queue.is_some() {
+                return;
+            }
+
+            this.bounds_save_task_queue = Some(cx.spawn(|this, mut cx| async move {
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
+                this.update(&mut cx, |this, cx| {
+                    if let Some(display) = cx.display() {
+                        if let Ok(display_uuid) = display.uuid() {
+                            let window_bounds = cx.window_bounds();
+                            let bounds = match window_bounds {
+                                WindowBounds::Fullscreen(bounds) => bounds,
+                                WindowBounds::Windowed(bounds) => bounds,
+                                WindowBounds::Maximized(bounds) => bounds,
+                            };
+                            let text_input = this.text_input.read(cx);
+                            let path = text_input
+                                .file_path()
+                                .as_ref()
+                                .map(|p| p.clone())
+                                .unwrap_or(Path::new("").to_path_buf());
+
+                            cx.db_connection()
+                                .update_window_position(&path, display_uuid, bounds)
+                        }
+                    }
+                    this.bounds_save_task_queue.take();
+                })
+                .ok();
+            }));
+        })];
+
         Self {
             text_input,
             title_bar,
             status_bar,
             modal_manager: cx.new_view(ModalManager::new),
             search_view,
+            bounds_save_task_queue: None,
+            _subscriptions,
         }
     }
 

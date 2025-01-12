@@ -1,4 +1,5 @@
 use assets::Assets;
+use db::{DbConnection, DB};
 use editor::editor::*;
 use futures::channel::mpsc;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -9,6 +10,7 @@ use std::path::PathBuf;
 use views::text_input::text_input::*;
 
 mod assets;
+mod db;
 mod editor;
 mod settings_manager;
 mod theme_manager;
@@ -17,6 +19,28 @@ mod views;
 use crate::theme_manager::ActiveTheme;
 
 actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew, Open]);
+
+fn bounds_for_path(path: &Option<PathBuf>, cx: &AppContext) -> WindowBounds {
+    if let Some(path) = path {
+        if let Some(positions) = cx.db_connection().window_position(path.clone()) {
+            for display in cx.displays() {
+                let Ok(display_uuid) = display.uuid() else {
+                    continue;
+                };
+                for pos in &positions {
+                    if pos.display_id == display_uuid {
+                        return WindowBounds::Windowed(bounds(
+                            point(px(pos.bounds.origin.x), px(pos.bounds.origin.y)),
+                            size(px(pos.bounds.size.width), px(pos.bounds.size.height)),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    WindowBounds::Windowed(Bounds::centered(None, size(px(400.), px(320.)), cx))
+}
 
 fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
     let window = cx
@@ -27,11 +51,7 @@ fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
                     appears_transparent: true,
                     traffic_light_position: Some(point(px(9.0), px(9.0))),
                 }),
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    size(px(400.), px(320.)),
-                    cx,
-                ))),
+                window_bounds: Some(bounds_for_path(&path, cx)),
                 window_min_size: Some(size(px(200.), px(160.))),
                 ..Default::default()
             },
@@ -45,6 +65,7 @@ fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
 
                     element
                 });
+
                 cx.new_view(|cx| TextEditor::new(editor, cx.focus_handle(), cx))
             },
         )
@@ -146,6 +167,8 @@ fn main() {
     });
 
     app.run(move |cx: &mut AppContext| {
+        _ = DB::register_global(cx);
+
         cx.bind_keys([
             KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-o", Open, None),
