@@ -1,7 +1,7 @@
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
-use anyhow::{anyhow, Result};
-use directories::BaseDirs;
+use anyhow::Result;
+
 use gpui::{point, size, AppContext, Bounds, Global, Pixels};
 use rusqlite::{
     params,
@@ -9,6 +9,8 @@ use rusqlite::{
     Connection, ToSql,
 };
 use uuid::Uuid;
+
+use crate::paths::app_data_path;
 
 pub struct DB {
     connection: Arc<Connection>,
@@ -59,17 +61,9 @@ pub struct WindowPosition {
 
 impl DB {
     pub fn register_global(cx: &mut AppContext) -> Result<()> {
-        // move to module
-        let Some(base_dirs) = BaseDirs::new() else {
-            return Err(anyhow!("Could not find base_dirs"));
-        };
-        let app_data_path = base_dirs.data_dir().join("rust-text");
-        if !app_data_path.exists() {
-            _ = fs::create_dir(&app_data_path);
-        }
-
-        let db_dir = app_data_path.join("db.sqlite");
-        let connection = Connection::open(db_dir)?;
+        let app_data_path = app_data_path()?;
+        let db_file = app_data_path.join("db.sqlite");
+        let connection = Connection::open(db_file)?;
 
         Self::migrate(&connection)?;
 

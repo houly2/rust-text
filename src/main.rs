@@ -12,6 +12,7 @@ use views::text_input::text_input::*;
 mod assets;
 mod db;
 mod editor;
+mod paths;
 mod settings_manager;
 mod theme_manager;
 mod views;
