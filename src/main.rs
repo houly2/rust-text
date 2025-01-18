@@ -244,7 +244,7 @@ fn main() {
         } else {
             #[cfg(debug_assertions)]
             {
-                let path = PathBuf::from("/Users/philipwagner/Downloads/test.txt");
+                let path = PathBuf::from("/Users/philipwagner/Documents/rust/text/test.txt");
                 open_window(Some(path), cx);
             }
 
