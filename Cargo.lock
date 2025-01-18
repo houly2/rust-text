@@ -4057,7 +4057,6 @@ dependencies = [
  "rust-embed",
  "smallvec",
  "strum 0.26.3",
- "unicode-segmentation",
  "uuid",
 ]
 

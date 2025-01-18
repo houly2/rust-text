@@ -5,9 +5,9 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
-use unicode_segmentation::*;
 
 use super::blink_manager::BlinkManager;
+use super::char_kind::CharKind;
 use super::command::*;
 use super::lines::Lines;
 use super::scroll_manager::ScrollManager;
@@ -696,38 +696,53 @@ impl TextInput {
     }
 
     fn start_of_word(&self, offset: usize) -> usize {
-        let c = self.content.char_to_byte(self.previous_boundary(offset));
-        let t = self
-            .content
-            .to_string()
-            .unicode_word_indices()
-            .rev()
-            .find_map(|(idx, _)| (idx < c).then_some(idx))
-            .unwrap_or(0);
+        let mut t = offset;
+        let mut prev_ch = None;
+        let mut consumed_all_punctuation = false;
 
-        self.content.byte_to_char(t)
+        for ch in self.content.chars_at(t).reversed() {
+            if !consumed_all_punctuation {
+                consumed_all_punctuation = CharKind::kind(ch) != CharKind::Punctuation;
+            } else {
+                if let Some(prev_ch) = prev_ch {
+                    if CharKind::kind(prev_ch) != CharKind::kind(ch)
+                        && CharKind::kind(ch) != CharKind::WhiteSpace
+                    {
+                        break;
+                    }
+                }
+            }
+
+            t -= ch.len_utf16();
+            prev_ch = Some(ch);
+        }
+
+        t
     }
 
     fn end_of_word(&self, offset: usize) -> usize {
-        let mut skip = 0;
-        for charr in self.content.chars_at(offset) {
-            if charr != ' ' {
-                break;
+        let mut t = offset;
+        let mut prev_ch = None;
+        let mut consumed_all_punctuation = false;
+
+        for ch in self.content.chars_at(t) {
+            if !consumed_all_punctuation {
+                consumed_all_punctuation = CharKind::kind(ch) != CharKind::Punctuation;
+            } else {
+                if let Some(prev_ch) = prev_ch {
+                    if CharKind::kind(prev_ch) != CharKind::kind(ch)
+                        && CharKind::kind(prev_ch) != CharKind::WhiteSpace
+                    {
+                        break;
+                    }
+                }
             }
-            skip += 1;
+
+            t += ch.len_utf16();
+            prev_ch = Some(ch);
         }
 
-        let c = self.content.char_to_byte(offset + skip);
-
-        let t = self
-            .content
-            .to_string()
-            .unicode_word_indices()
-            .rev()
-            .find_map(|(idx, word)| (idx <= c).then_some(idx + word.len()))
-            .unwrap_or(0);
-
-        self.content.byte_to_char(t)
+        t
     }
 
     fn previous_boundary(&self, offset: usize) -> usize {

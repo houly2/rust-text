@@ -1,4 +1,5 @@
 mod blink_manager;
+mod char_kind;
 mod command;
 pub mod lines;
 mod scroll_manager;
