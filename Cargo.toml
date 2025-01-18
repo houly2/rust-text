@@ -17,6 +17,15 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 anyhow = "1.0.95"
 uuid = { version = "1.11.1", features = ["v4", "fast-rng", "serde"] }
 
+[build-dependencies]
+cc = "*"
+
+[profile.release]
+lto = true        # Enable link-time optimization
+codegen-units = 1 # Reduce number of codegen units to increase optimizations
+panic = 'abort'   # Abort on panic
+strip = true      # Strip symbols from binary*
+
 # https://crates.io/crates/cargo-packager
 [package.metadata.packager]
 formats = ["app"]
