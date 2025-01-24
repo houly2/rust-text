@@ -1,11 +1,18 @@
 use gpui::*;
-use ropey::Rope;
+use ropey::{Rope, RopeSlice};
 use smallvec::SmallVec;
 use std::ops::Range;
+use std::sync::Arc;
+use streaming_iterator::StreamingIterator;
+use tree_sitter::{Node, Parser, Query, QueryCursor, QueryMatch, TextProvider};
 
 use crate::theme_manager::ActiveTheme;
 
-use super::{lines::Lines, text_input::TextInput};
+use super::{
+    lines::Lines,
+    syntax::{LanguageConfig, LanguageConfigManager},
+    text_input::TextInput,
+};
 
 pub struct TextElement {
     input: View<TextInput>,
@@ -173,6 +180,157 @@ impl TextElement {
         }
         Some(selection_quads)
     }
+
+    // fn node_to_text_run(&self, node: Node, base_run: &TextRun) -> Option<TextRun> {
+    //     match node.kind() {
+    //         "atx_heading" => Some(TextRun {
+    //             len: node.end_byte() - node.start_byte(),
+    //             font: base_run.font.clone().bold(),
+    //             ..base_run.clone()
+    //         }),
+    //         "paragraph" | "list_item" => Some(TextRun {
+    //             len: node.end_byte() - node.start_byte(),
+    //             ..base_run.clone()
+    //         }),
+    //         _ => None,
+    //     }
+    // }
+
+    // fn travers_tree(&self, node: Node, base_run: &TextRun) -> Vec<TextRun> {
+    //     let mut text_runs = Vec::new();
+    //     if let Some(run) = self.node_to_text_run(node, base_run) {
+    //         text_runs.push(run);
+    //     }
+    //     for child in node.children(&mut node.walk()) {
+    //         text_runs.extend(self.travers_tree(child, base_run));
+    //     }
+    //     text_runs
+    // }
+
+    fn injection_pair<'a>(
+        &self,
+        query: &Query,
+        query_match: &QueryMatch<'a, 'a>,
+        source: &RopeSlice<'a>,
+    ) -> (Option<&'a str>, Option<Node<'a>>) {
+        let mut injection_capture = None;
+        let mut content_node = None;
+
+        for cap in query_match.captures {
+            // todo: this should be part of some HighlighConfig thingy and done on init, since it does not change
+            if let Some(capture_name) = query.capture_names().get(cap.index as usize) {
+                match *capture_name {
+                    "injection.language" => {
+                        if let Some(name) = source.byte_slice(cap.node.byte_range()).as_str() {
+                            injection_capture = Some(name);
+                        }
+                    }
+                    "injection.content" => {
+                        content_node = Some(cap.node);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        (injection_capture, content_node)
+    }
+
+    fn query_tree(
+        &self,
+        query: &Query,
+        tree: &tree_sitter::Tree,
+        _base_run: &TextRun,
+        rope_slice: RopeSlice,
+        lang_config: &LanguageConfigManager,
+    ) -> Vec<(Arc<LanguageConfig>, Range<usize>)> {
+        let text = RopeProvider(rope_slice);
+
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&query, tree.root_node(), text);
+
+        let mut injections = Vec::new();
+
+        while let Some(mat) = matches.next() {
+            let (mut injection_capture, content_node) =
+                self.injection_pair(query, mat, &rope_slice);
+
+            if injection_capture.is_none() {
+                for prop in query.property_settings(mat.pattern_index) {
+                    if prop.key.as_ref() == "injection.language" {
+                        injection_capture = prop.value.as_ref().map(|s| s.as_ref().into());
+                    }
+                }
+            }
+
+            if let (Some(injection_capture), Some(content_node)) = (injection_capture, content_node)
+            {
+                if let Some(lang_config) =
+                    lang_config.language_config_for_language_id(injection_capture)
+                {
+                    let r = content_node.range().start_byte..content_node.range().end_byte;
+                    injections.push((lang_config, r));
+                } else {
+                    println!("missing language: {}", injection_capture);
+                }
+            }
+        }
+
+        injections
+    }
+
+    fn highlight_node(
+        &self,
+        node: Node<'_>,
+        name: Option<&str>,
+        base_run: &TextRun,
+    ) -> Option<TextRun> {
+        let Some(name) = name else { return None };
+        let base_run = TextRun {
+            len: node.end_byte() - node.start_byte(),
+            ..base_run.clone()
+        };
+
+        match name {
+            "punctuation.special" => Some(TextRun {
+                font: base_run.font.bold(),
+                ..base_run
+            }),
+            "text.title" => Some(TextRun {
+                font: base_run.font.bold(),
+                color: hsla(0., 0., 0.8, 1.0),
+                ..base_run
+            }),
+            "text.emphasis" => Some(TextRun {
+                font: base_run.font.italic(),
+                ..base_run
+            }),
+            "text.strong" => Some(TextRun {
+                font: base_run.font.bold(),
+                ..base_run
+            }),
+            "punctuation.delimiter" => Some(TextRun {
+                color: hsla(0., 0., 0.4, 1.0),
+                ..base_run
+            }),
+            "property" => Some(TextRun {
+                color: hsla(0.06, 0.92, 0.75, 1.0),
+                ..base_run
+            }),
+            "number" => Some(TextRun {
+                color: hsla(0.97, 0.65, 0.77, 1.0),
+                ..base_run
+            }),
+            "boolean" => Some(TextRun {
+                color: hsla(1., 0.92, 0.75, 1.0),
+                ..base_run
+            }),
+            _ => {
+                // println!("missing: {} in {:?}", name, node);
+                return None;
+            }
+        }
+    }
 }
 
 pub struct PrepaintState {
@@ -190,6 +348,29 @@ impl IntoElement for TextElement {
     type Element = Self;
     fn into_element(self) -> Self::Element {
         self
+    }
+}
+
+pub struct ChunksBytes<'a> {
+    chunks: ropey::iter::Chunks<'a>,
+}
+impl<'a> Iterator for ChunksBytes<'a> {
+    type Item = &'a [u8];
+    fn next(&mut self) -> Option<Self::Item> {
+        self.chunks.next().map(str::as_bytes)
+    }
+}
+
+#[derive(Clone)]
+pub struct RopeProvider<'a>(pub RopeSlice<'a>);
+impl<'a> TextProvider<&'a [u8]> for RopeProvider<'a> {
+    type I = ChunksBytes<'a>;
+
+    fn text(&mut self, node: Node) -> Self::I {
+        let fragment = self.0.byte_slice(node.start_byte()..node.end_byte());
+        ChunksBytes {
+            chunks: fragment.chunks(),
+        }
     }
 }
 
@@ -224,6 +405,7 @@ impl Element for TextElement {
         let cursor = input.cursor_offset();
         let style = cx.text_style();
         let text_color = style.color;
+        let display_text = input.content.clone();
 
         let padding = px(8.);
         let new_bounds = Bounds::new(
@@ -243,35 +425,151 @@ impl Element for TextElement {
             strikethrough: None,
         };
 
-        let runs = if let Some(marked_range) = input.marked_range.as_ref() {
-            vec![
-                TextRun {
-                    len: marked_range.start,
-                    ..run.clone()
-                },
-                TextRun {
-                    len: marked_range.end - marked_range.start,
-                    underline: Some(UnderlineStyle {
-                        color: Some(run.color),
-                        thickness: px(1.),
-                        wavy: false,
-                    }),
-                    ..run.clone()
-                },
-                TextRun {
-                    len: input.content.len_bytes() - marked_range.end,
-                    ..run.clone()
-                },
-            ]
-            .into_iter()
-            .filter(|run| run.len > 0)
-            .collect()
+        let runs = if input.parse_tree.is_some() {
+            let mut runs = vec![];
+            let tree = input.parse_tree.clone().unwrap();
+
+            let markdown = input
+                .language_configs
+                .language_config_for_language_id("markdown")
+                .expect("Markdown should always be there");
+
+            let md_query = markdown.injection_query.as_ref().unwrap();
+            let configs = self.query_tree(
+                &md_query,
+                &tree,
+                &run,
+                display_text.slice(..),
+                &input.language_configs,
+            );
+
+            let mut cursor = QueryCursor::new();
+            let mut captures = cursor.captures(
+                &markdown.highlight_query,
+                tree.root_node(),
+                RopeProvider(display_text.slice(..)),
+            );
+
+            let mut last_end: usize = 0;
+
+            while let Some((mat, _)) = captures.next() {
+                for cap in mat.captures {
+                    for (config, range) in &configs {
+                        let node_start = cap.node.start_byte();
+                        if node_start < range.start || last_end > range.start {
+                            continue;
+                        }
+
+                        let mut parser = Parser::new();
+                        parser
+                            .set_language(&config.language)
+                            .expect("Error Loading Grammar");
+
+                        let text = display_text.slice(range.clone());
+                        let Some(parse_tree) = parser.parse(text.to_string(), None) else {
+                            continue;
+                        };
+
+                        let mut cursor = QueryCursor::new();
+                        let mut captures = cursor.captures(
+                            &config.highlight_query,
+                            parse_tree.root_node(),
+                            RopeProvider(text),
+                        );
+
+                        while let Some((mat, _)) = captures.next() {
+                            for cap in mat.captures {
+                                if cap.node.start_byte() < last_end {
+                                    continue;
+                                }
+                                if let Some(r) = self.highlight_node(
+                                    cap.node,
+                                    config
+                                        .highlight_query
+                                        .capture_names()
+                                        .get(cap.index as usize)
+                                        .map(|n| *n),
+                                    &run,
+                                ) {
+                                    if range.start + cap.node.start_byte() > last_end {
+                                        runs.push(TextRun {
+                                            len: range.start + cap.node.start_byte() - last_end,
+                                            ..run.clone()
+                                        });
+                                    }
+
+                                    runs.push(r);
+                                    last_end = range.start + cap.node.end_byte();
+                                }
+                            }
+                        }
+                        if last_end < range.end {
+                            runs.push(TextRun {
+                                len: range.end - last_end,
+                                ..run.clone()
+                            });
+                            last_end = range.end;
+                        }
+                    }
+
+                    if last_end > cap.node.start_byte() {
+                        continue;
+                    }
+
+                    if let Some(r) = self.highlight_node(
+                        cap.node,
+                        markdown
+                            .highlight_query
+                            .capture_names()
+                            .get(cap.index as usize)
+                            .map(|n| *n),
+                        &run,
+                    ) {
+                        if cap.node.start_byte() > last_end {
+                            runs.push(TextRun {
+                                len: cap.node.start_byte() - last_end,
+                                ..run.clone()
+                            });
+                        }
+
+                        runs.push(r);
+                        last_end = cap.node.end_byte();
+                    }
+                }
+            }
+            runs
         } else {
             vec![run]
         };
 
+        // let runs = if let Some(marked_range) = input.marked_range.as_ref() {
+        //     vec![
+        //         TextRun {
+        //             len: marked_range.start,
+        //             ..run.clone()
+        //         },
+        //         TextRun {
+        //             len: marked_range.end - marked_range.start,
+        //             underline: Some(UnderlineStyle {
+        //                 color: Some(run.color),
+        //                 thickness: px(1.),
+        //                 wavy: false,
+        //             }),
+        //             ..run.clone()
+        //         },
+        //         TextRun {
+        //             len: input.content.len_bytes() - marked_range.end,
+        //             ..run.clone()
+        //         },
+        //     ]
+        //     .into_iter()
+        //     .filter(|run| run.len > 0)
+        //     .collect()
+        // } else {
+        //     vec![run]
+        // };
+
         let font_size = style.font_size.to_pixels(cx.rem_size());
-        let display_text = input.content.clone();
         let text: SharedString = display_text.to_string().into();
 
         let lines_raw = cx

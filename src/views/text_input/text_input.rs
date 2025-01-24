@@ -5,12 +5,14 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
+use tree_sitter::{InputEdit, Parser, Tree};
 
 use super::blink_manager::BlinkManager;
 use super::char_kind::CharKind;
 use super::command::*;
 use super::lines::Lines;
 use super::scroll_manager::ScrollManager;
+use super::syntax::LanguageConfigManager;
 use super::text_element::TextElement;
 
 actions!(
@@ -88,6 +90,10 @@ pub struct TextInput {
 
     settings_soft_wrap: bool,
 
+    parser: Parser,
+    pub parse_tree: Option<Tree>,
+    pub language_configs: LanguageConfigManager,
+
     _subscriptions: Vec<Subscription>,
 }
 
@@ -136,6 +142,18 @@ impl TextInput {
 
         let focus_handle = cx.focus_handle();
 
+        let language_configs = LanguageConfigManager::new();
+        let markdown = language_configs
+            .language_config_for_language_id("markdown")
+            .expect("Markdown should always be there");
+
+        let mut parser = Parser::new();
+        parser
+            .set_language(&markdown.language)
+            .expect("Error Loading MD Grammar");
+
+        let parse_tree = parser.parse("", None);
+
         Self {
             mode,
             focus_handle: focus_handle.clone(),
@@ -157,6 +175,9 @@ impl TextInput {
             is_dirty: false,
             current_file_path: None,
             settings_soft_wrap: false,
+            parser,
+            parse_tree,
+            language_configs,
             _subscriptions: vec![
                 cx.observe(&scroll_manager, |_, _, cx| cx.notify()),
                 cx.observe(&blink_manager, |_, _, cx| cx.notify()),
@@ -204,15 +225,38 @@ impl TextInput {
         RefCell::borrow_mut(&self.on_next_paint_stack).push(Box::new(on_notify));
     }
 
-    pub fn execute_command(&mut self, command: Box<dyn Command>, cx: &mut ViewContext<Self>) {
+    fn update_tree(&mut self, start_char: usize, len_char: isize) {
+        let start_byte = self.content.char_to_byte(start_char);
+        let end_byte = self
+            .content
+            .char_to_byte((start_char as isize + len_char) as usize);
+
+        let start_line = self.content.byte_to_line(start_byte);
+        let end_line = self.content.byte_to_line(end_byte);
+
+        if let Some(mut tree) = self.parse_tree.take() {
+            tree.edit(&InputEdit {
+                start_byte,
+                old_end_byte: start_byte,
+                new_end_byte: end_byte,
+                start_position: tree_sitter::Point::new(start_line, start_byte - start_line),
+                old_end_position: tree_sitter::Point::new(start_line, start_byte - start_line),
+                new_end_position: tree_sitter::Point::new(end_line, end_byte - end_line),
+            });
+
+            // todo: to_string probably not permformant?
+            self.parse_tree = self.parser.parse(self.content.to_string(), Some(&tree));
+        }
+    }
+
+    fn execute_command(&mut self, command: Box<dyn Command>, _: &mut ViewContext<Self>) {
         command.execute(&mut self.content);
         self.undo_stack.push(command);
         self.redo_stack.clear();
         self.is_dirty = true;
-        cx.notify();
     }
 
-    pub fn undo(&mut self, _: &Undo, cx: &mut ViewContext<Self>) {
+    fn undo(&mut self, _: &Undo, cx: &mut ViewContext<Self>) {
         if let Some(command) = self.undo_stack.pop() {
             let prev_selection = command.undo(&mut self.content);
             self.redo_stack.push(command);
@@ -927,11 +971,12 @@ impl ViewInputHandler for TextInput {
             self.execute_command(
                 Box::new(DeleteCommand::new(
                     range.start,
-                    old_text,
+                    old_text.clone(),
                     self.selected_range.clone(),
                 )),
                 cx,
             );
+            self.update_tree(range.start, -(old_text.chars().count() as isize));
         }
 
         if !text.is_empty() {
@@ -943,10 +988,12 @@ impl ViewInputHandler for TextInput {
                 )),
                 cx,
             );
+            self.update_tree(range.start, text.chars().count() as isize);
         }
 
         let l = text.chars().count();
         self.update_selected_range(&(range.start + l..range.start + l), cx);
+        cx.notify();
     }
 
     fn replace_and_mark_text_in_range(

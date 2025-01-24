@@ -16,6 +16,12 @@ directories = "5.0.1"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 anyhow = "1.0.95"
 uuid = { version = "1.11.1", features = ["v4", "fast-rng", "serde"] }
+tree-sitter = "0.24"
+tree-sitter-md = { git = "https://github.com/tree-sitter-grammars/tree-sitter-markdown.git", rev = "192407ab5a24bfc24f13332979b5e7967518754a", features = [
+    "parser",
+] }
+tree-sitter-yaml = "0.7.0"
+streaming-iterator = "0.1.9"
 
 [build-dependencies]
 cc = "*"
