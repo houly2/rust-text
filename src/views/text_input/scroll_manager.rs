@@ -86,6 +86,8 @@ impl ScrollManager {
         }
 
         let cursor_pos = lines.position_for_byte_idx_in_line(cursor_byte_idx, line_idx);
+        let old_offset_x = self.offset.x;
+        let old_offset_y = self.offset.y;
 
         let cursor_screen_x = cursor_pos.x + self.offset.x;
 
@@ -115,8 +117,6 @@ impl ScrollManager {
         let lower_bound = self.offset.y.abs() + margin_top;
         let upper_bound = self.offset.y.abs() + margin_bottom;
 
-        let old_offset_y = self.offset.y;
-
         self.offset.y = if cursor_y < lower_bound {
             px(0.).min(-(cursor_y - margin_top))
         } else if cursor_y > upper_bound {
@@ -125,7 +125,7 @@ impl ScrollManager {
             self.offset.y
         };
 
-        if old_offset_y != self.offset.y {
+        if old_offset_y != self.offset.y || old_offset_x != self.offset.x {
             self.show(self.show_epoch, cx);
             cx.notify();
         }
