@@ -440,7 +440,13 @@ impl Element for TextElement {
                             .expect("Error Loading Grammar");
 
                         let text = display_text.slice(range.clone());
-                        let Some(parse_tree) = parser.parse(text.to_string(), None) else {
+                        let Some(parse_tree) = parser.parse_with(
+                            &mut |byte, _| {
+                                let (chunk, start_byte, _, _) = text.chunk_at_byte(byte);
+                                &chunk.as_bytes()[byte - start_byte..]
+                            },
+                            None,
+                        ) else {
                             continue;
                         };
 

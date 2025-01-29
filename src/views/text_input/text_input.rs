@@ -242,8 +242,13 @@ impl TextInput {
                 new_end_position: tree_sitter::Point::new(end_line, end_byte - end_line),
             });
 
-            // todo: to_string probably not permformant?
-            self.parse_tree = self.parser.parse(self.content.to_string(), Some(&tree));
+            self.parse_tree = self.parser.parse_with(
+                &mut |byte, _| {
+                    let (chunk, start_byte, _, _) = self.content.chunk_at_byte(byte);
+                    &chunk.as_bytes()[byte - start_byte..]
+                },
+                Some(&tree),
+            );
         }
     }
 
