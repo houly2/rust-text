@@ -181,32 +181,6 @@ impl TextElement {
         Some(selection_quads)
     }
 
-    // fn node_to_text_run(&self, node: Node, base_run: &TextRun) -> Option<TextRun> {
-    //     match node.kind() {
-    //         "atx_heading" => Some(TextRun {
-    //             len: node.end_byte() - node.start_byte(),
-    //             font: base_run.font.clone().bold(),
-    //             ..base_run.clone()
-    //         }),
-    //         "paragraph" | "list_item" => Some(TextRun {
-    //             len: node.end_byte() - node.start_byte(),
-    //             ..base_run.clone()
-    //         }),
-    //         _ => None,
-    //     }
-    // }
-
-    // fn travers_tree(&self, node: Node, base_run: &TextRun) -> Vec<TextRun> {
-    //     let mut text_runs = Vec::new();
-    //     if let Some(run) = self.node_to_text_run(node, base_run) {
-    //         text_runs.push(run);
-    //     }
-    //     for child in node.children(&mut node.walk()) {
-    //         text_runs.extend(self.travers_tree(child, base_run));
-    //     }
-    //     text_runs
-    // }
-
     fn injection_pair<'a>(
         &self,
         query: &Query,

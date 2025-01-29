@@ -225,11 +225,9 @@ impl TextInput {
         RefCell::borrow_mut(&self.on_next_paint_stack).push(Box::new(on_notify));
     }
 
-    fn update_tree(&mut self, start_char: usize, len_char: isize) {
-        let start_byte = self.content.char_to_byte(start_char);
-        let end_byte = self
-            .content
-            .char_to_byte((start_char as isize + len_char) as usize);
+    fn update_tree(&mut self, char_range: Range<usize>) {
+        let start_byte = self.content.char_to_byte(char_range.start);
+        let end_byte = self.content.char_to_byte(char_range.end);
 
         let start_line = self.content.byte_to_line(start_byte);
         let end_line = self.content.byte_to_line(end_byte);
@@ -251,6 +249,8 @@ impl TextInput {
 
     fn execute_command(&mut self, command: Box<dyn Command>, _: &mut ViewContext<Self>) {
         command.execute(&mut self.content);
+        self.update_tree(command.char_range());
+
         self.undo_stack.push(command);
         self.redo_stack.clear();
         self.is_dirty = true;
@@ -259,6 +259,8 @@ impl TextInput {
     fn undo(&mut self, _: &Undo, cx: &mut ViewContext<Self>) {
         if let Some(command) = self.undo_stack.pop() {
             let prev_selection = command.undo(&mut self.content);
+            let r = command.char_range();
+            self.update_tree(r.end..r.start);
             self.redo_stack.push(command);
             self.update_selected_range(&prev_selection, cx);
         }
@@ -267,6 +269,7 @@ impl TextInput {
     pub fn redo(&mut self, _: &Redo, cx: &mut ViewContext<Self>) {
         if let Some(command) = self.redo_stack.pop() {
             let new_selection = command.execute(&mut self.content);
+            self.update_tree(command.char_range());
             self.undo_stack.push(command);
             self.update_selected_range(&new_selection, cx);
         }
@@ -976,7 +979,6 @@ impl ViewInputHandler for TextInput {
                 )),
                 cx,
             );
-            self.update_tree(range.start, -(old_text.chars().count() as isize));
         }
 
         if !text.is_empty() {
@@ -988,7 +990,6 @@ impl ViewInputHandler for TextInput {
                 )),
                 cx,
             );
-            self.update_tree(range.start, text.chars().count() as isize);
         }
 
         let l = text.chars().count();

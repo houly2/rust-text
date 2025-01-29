@@ -5,6 +5,7 @@ use ropey::Rope;
 pub trait Command {
     fn execute(&self, content: &mut Rope) -> Range<usize>;
     fn undo(&self, content: &mut Rope) -> Range<usize>;
+    fn char_range(&self) -> Range<usize>;
 }
 
 pub struct InsertCommand {
@@ -34,6 +35,10 @@ impl Command for InsertCommand {
         content.remove(self.position..self.position + self.text.chars().count());
         self.old_selection.clone()
     }
+
+    fn char_range(&self) -> Range<usize> {
+        self.position..self.position + self.text.chars().count()
+    }
 }
 
 pub struct DeleteCommand {
@@ -61,5 +66,9 @@ impl Command for DeleteCommand {
     fn undo(&self, content: &mut Rope) -> Range<usize> {
         content.insert(self.position, &self.text);
         self.old_selection.clone()
+    }
+
+    fn char_range(&self) -> Range<usize> {
+        self.position + self.text.chars().count()..self.position
     }
 }
