@@ -579,7 +579,7 @@ impl Element for TextElement {
             lines.position_for_byte_idx_in_line(cursor_byte_idx - line_byte_idx, line_idx);
 
         let scroll_manager = input.scroll_manager.read(cx);
-        let offset = scroll_manager.offset;
+        let offset = scroll_manager.offset(input.soft_wrap_enabled());
         let scroll_bar = input.scroll_manager.read_with(cx, |this, cx| {
             this.paint_bar(&bounds, lines.height(), cursor_pos, cx)
         });

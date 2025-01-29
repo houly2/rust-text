@@ -11,7 +11,7 @@ pub struct ScrollManager {
     show_epoch: usize,
     calc_epoch: usize,
     pub width: Pixels,
-    pub offset: Point<Pixels>,
+    offset: Point<Pixels>,
     padding_vertical: Pixels,
     padding_horizontal: Pixels,
 }
@@ -249,5 +249,13 @@ impl ScrollManager {
                 theme.scroll_bar_cursor_highlight
             )
         ])
+    }
+
+    pub fn offset(&self, soft_wrap_enabled: bool) -> Point<Pixels> {
+        if soft_wrap_enabled {
+            point(px(0.), self.offset.y)
+        } else {
+            self.offset
+        }
     }
 }
