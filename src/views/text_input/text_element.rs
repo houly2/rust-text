@@ -283,11 +283,11 @@ impl TextElement {
                 font: base_run.font.bold(),
                 ..base_run
             }),
-            "punctuation.delimiter" => Some(TextRun {
+            "punctuation.delimiter" | "punctuation.bracket" => Some(TextRun {
                 color: hsla(0., 0., 0.4, 1.0),
                 ..base_run
             }),
-            "property" => Some(TextRun {
+            "property" | "tag" => Some(TextRun {
                 color: hsla(0.06, 0.92, 0.75, 1.0),
                 ..base_run
             }),
@@ -300,7 +300,7 @@ impl TextElement {
                 ..base_run
             }),
             _ => {
-                // println!("missing: {} in {:?}", name, node);
+                println!("missing: {} in {:?}", name, node);
                 return None;
             }
         }
@@ -453,9 +453,10 @@ impl Element for TextElement {
 
                         while let Some((mat, _)) = captures.next() {
                             for cap in mat.captures {
-                                if cap.node.start_byte() < last_end {
+                                if range.start + cap.node.start_byte() < last_end {
                                     continue;
                                 }
+
                                 if let Some(r) = self.highlight_node(
                                     cap.node,
                                     config

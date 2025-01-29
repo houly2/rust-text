@@ -73,6 +73,20 @@ impl LanguageConfigManager {
             ),
         )));
 
+        language_configs.push(Arc::new(LanguageConfig::new(
+            "html",
+            vec!["html"],
+            tree_sitter_html::LANGUAGE.into(),
+            Some(Self::load_query(
+                &tree_sitter_html::LANGUAGE.into(),
+                tree_sitter_html::INJECTIONS_QUERY,
+            )),
+            Self::load_query(
+                &tree_sitter_html::LANGUAGE.into(),
+                tree_sitter_html::HIGHLIGHTS_QUERY,
+            ),
+        )));
+
         Self { language_configs }
     }
 
