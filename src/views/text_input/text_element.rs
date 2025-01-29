@@ -512,6 +512,14 @@ impl Element for TextElement {
                     }
                 }
             }
+
+            if last_end < display_text.len_bytes() {
+                runs.push(TextRun {
+                    len: display_text.len_bytes() - last_end,
+                    ..run.clone()
+                });
+            }
+
             runs
         } else {
             vec![run]
