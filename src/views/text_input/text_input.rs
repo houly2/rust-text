@@ -758,7 +758,7 @@ impl TextInput {
             } else {
                 if let Some(prev_ch) = prev_ch {
                     if CharKind::kind(prev_ch) != CharKind::kind(ch)
-                        && CharKind::kind(ch) != CharKind::WhiteSpace
+                        && CharKind::kind(prev_ch) != CharKind::WhiteSpace
                     {
                         break;
                     }
