@@ -50,6 +50,15 @@ const MIGRATIONS: &'static [Migration] = &[
         )",
     },
     Migration {
+        migration: "2_create_tmp_files",
+        statement: "CREATE TABLE tmp_files (
+            id          INTEGER PRIMARY KEY,
+            file_id     BLOB NOT NULL UNIQUE,
+            content     TEXT,
+            created_at  TEXT DEFAULT current_timestamp
+        )",
+    },
+    Migration {
         migration: "3_create_open_windows",
         statement: "CREATE TABLE open_windows (
             id          INTEGER PRIMARY KEY,
@@ -160,9 +169,9 @@ impl DB {
             .ok()
     }
 
-    pub fn update_path_settings(&self, file_path: &PathBuf, word_wrap: bool) {
+    pub fn update_path_settings(&self, file_path: &PathBuf, word_wrap: bool) -> &Self {
         let Some(file_path_str) = file_path.to_str() else {
-            return;
+            return self;
         };
 
         _ = self.connection.execute(
@@ -174,8 +183,37 @@ impl DB {
             ",
             params![file_path_str, word_wrap],
         );
+
+        self
     }
 
+    pub fn tmp_file_load(&self, file_id: MyUuid) -> Option<String> {
+        self.connection
+            .query_row(
+                "SELECT content FROM tmp_files WHERE file_id = ?1",
+                params![file_id],
+                |row| Ok(row.get(0)?),
+            )
+            .ok()
+    }
+
+    pub fn tmp_file_save(&self, file_id: MyUuid, content: String) {
+        _ = self.connection.execute(
+            "
+            INSERT INTO tmp_files (file_id, content)
+            VALUES (?1, ?2)
+            ON CONFLICT DO
+            UPDATE SET content = ?2
+            ",
+            params![file_id, content],
+        );
+    }
+
+    pub fn tmp_file_delete(&self, file_id: MyUuid) {
+        _ = self
+            .connection
+            .execute("DELETE FROM tmp_files WHERE file_id = ?1", params![file_id]);
+    }
 
     pub fn open_windows(&self) -> Option<Vec<OldOpenWindow>> {
         Some(

@@ -11,6 +11,7 @@ use crate::{
     settings_manager::CurrentSettings,
     theme_manager::ActiveTheme,
     views::text_input::text_input::{TextInput, TextInputMode},
+    ContentChanged,
 };
 
 use super::{
@@ -64,40 +65,50 @@ impl Editor {
         let status_bar = cx.new_view(|_| StatusBar::new(weak_handle.clone()));
         let search_view = cx.new_view(|cx| SearchView::new(weak_handle.clone(), cx));
 
-        let _subscriptions = vec![cx.observe_window_bounds(|this, cx| {
-            if this.bounds_save_task_queue.is_some() {
-                return;
-            }
+        let _subscriptions = vec![
+            cx.subscribe(&text_input, |this, view, _: &ContentChanged, cx| {
+                let content = &view.read(cx).content;
+                cx.db_connection()
+                    .tmp_file_save(this.file_id, content.into());
+            }),
+            cx.observe_window_bounds(|this, cx| {
+                if this.bounds_save_task_queue.is_some() {
+                    return;
+                }
 
-            this.bounds_save_task_queue = Some(cx.spawn(|this, mut cx| async move {
-                cx.background_executor()
-                    .timer(Duration::from_millis(250))
-                    .await;
-                this.update(&mut cx, |this, cx| {
-                    if let Some(display) = cx.display() {
-                        if let Ok(display_uuid) = display.uuid() {
-                            let window_bounds = cx.window_bounds();
-                            let bounds = match window_bounds {
-                                WindowBounds::Fullscreen(bounds) => bounds,
-                                WindowBounds::Windowed(bounds) => bounds,
-                                WindowBounds::Maximized(bounds) => bounds,
-                            };
-                            let text_input = this.text_input.read(cx);
-                            let path = text_input
-                                .file_path()
-                                .as_ref()
-                                .map(|p| p.clone())
-                                .unwrap_or(Path::new("").to_path_buf());
+                this.bounds_save_task_queue = Some(cx.spawn(|this, mut cx| async move {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(250))
+                        .await;
+                    this.update(&mut cx, |this, cx| {
+                        if let Some(display) = cx.display() {
+                            if let Ok(display_uuid) = display.uuid() {
+                                let window_bounds = cx.window_bounds();
+                                let bounds = match window_bounds {
+                                    WindowBounds::Fullscreen(bounds) => bounds,
+                                    WindowBounds::Windowed(bounds) => bounds,
+                                    WindowBounds::Maximized(bounds) => bounds,
+                                };
+                                let text_input = this.text_input.read(cx);
+                                let path = text_input
+                                    .file_path()
+                                    .as_ref()
+                                    .map(|p| p.clone())
+                                    .unwrap_or(Path::new("").to_path_buf());
 
-                            cx.db_connection()
-                                .update_window_position(&path, display_uuid, bounds)
+                                cx.db_connection().update_window_position(
+                                    &path,
+                                    display_uuid,
+                                    bounds,
+                                )
+                            }
                         }
-                    }
-                    this.bounds_save_task_queue.take();
-                })
-                .ok();
-            }));
-        })];
+                        this.bounds_save_task_queue.take();
+                    })
+                    .ok();
+                }));
+            }),
+        ];
 
         Self {
             file_id,
@@ -151,19 +162,27 @@ impl Editor {
         );
     }
 
-    pub fn read_file(&mut self, path: &PathBuf, cx: &mut ViewContext<Self>) {
-        if let Ok(new_content) = fs::read_to_string(path) {
-            self.text_input.update(cx, |this, cx| {
-                this.set_file_path(path.into(), cx);
-                this.insert(new_content, cx);
-                this.mark_dirty(false, cx);
-                this.move_to(0, cx);
+    pub fn read_file(
+        &mut self,
+        path: &PathBuf,
+        previous_content: Option<String>,
+        cx: &mut ViewContext<Self>,
+    ) {
+        let is_dirty = previous_content.is_some();
+        let new_content = previous_content.or(fs::read_to_string(path).ok());
 
-                if let Some(settings) = cx.db_connection().path_settings(path) {
-                    this.set_soft_wrap(settings.word_wrap, cx);
-                }
-            });
-        }
+        self.text_input.update(cx, |this, cx| {
+            this.set_file_path(path.into(), cx);
+            if let Some(new_content) = new_content {
+                this.insert(new_content, cx);
+            }
+            this.mark_dirty(is_dirty, cx);
+            this.move_to(0, cx);
+
+            if let Some(settings) = cx.db_connection().path_settings(path) {
+                this.set_soft_wrap(settings.word_wrap, cx);
+            }
+        });
     }
 
     fn save_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
@@ -176,7 +195,8 @@ impl Editor {
         }
 
         cx.db_connection()
-            .update_path_settings(&path, self.text_input.read(cx).soft_wrap_enabled());
+            .update_path_settings(&path, self.text_input.read(cx).soft_wrap_enabled())
+            .tmp_file_delete(self.file_id);
 
         cx.notify();
     }

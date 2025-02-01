@@ -59,11 +59,12 @@ fn open_window(file_id: Option<MyUuid>, file_path: Option<&PathBuf>, cx: &mut Ap
             |cx| {
                 let editor = cx.new_view(|cx| {
                     let file_id = cx.db_connection().open_windows_add(file_id, file_path);
+                    let unsaved_content = cx.db_connection().tmp_file_load(file_id);
 
                     let mut element = Editor::new(file_id, cx);
 
                     if let Some(path) = file_path {
-                        element.read_file(&path, cx);
+                        element.read_file(&path, unsaved_content, cx);
                     }
 
                     element

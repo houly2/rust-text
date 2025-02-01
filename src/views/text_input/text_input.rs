@@ -51,6 +51,7 @@ actions!(
         SelectDocEnd,
         Undo,
         Redo,
+        ContentChanged
     ]
 );
 
@@ -98,6 +99,7 @@ pub struct TextInput {
 }
 
 impl EventEmitter<NewLine> for TextInput {}
+impl EventEmitter<ContentChanged> for TextInput {}
 
 impl TextInput {
     pub fn new(mode: TextInputMode, cx: &mut ViewContext<Self>) -> Self {
@@ -252,13 +254,15 @@ impl TextInput {
         }
     }
 
-    fn execute_command(&mut self, command: Box<dyn Command>, _: &mut ViewContext<Self>) {
+    fn execute_command(&mut self, command: Box<dyn Command>, cx: &mut ViewContext<Self>) {
         command.execute(&mut self.content);
         self.update_tree(command.char_range());
 
         self.undo_stack.push(command);
         self.redo_stack.clear();
         self.is_dirty = true;
+
+        cx.emit(ContentChanged);
     }
 
     fn undo(&mut self, _: &Undo, cx: &mut ViewContext<Self>) {
