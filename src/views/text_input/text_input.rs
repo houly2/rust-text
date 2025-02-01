@@ -266,22 +266,26 @@ impl TextInput {
     }
 
     fn undo(&mut self, _: &Undo, cx: &mut ViewContext<Self>) {
-        if let Some(command) = self.undo_stack.pop() {
-            let prev_selection = command.undo(&mut self.content);
-            let r = command.char_range();
-            self.update_tree(r.end..r.start);
-            self.redo_stack.push(command);
-            self.update_selected_range(&prev_selection, cx);
-        }
+        let Some(command) = self.undo_stack.pop() else {
+            return;
+        };
+
+        let prev_selection = command.undo(&mut self.content);
+        let r = command.char_range();
+        self.update_tree(r.end..r.start);
+        self.redo_stack.push(command);
+        self.update_selected_range(&prev_selection, cx);
     }
 
     pub fn redo(&mut self, _: &Redo, cx: &mut ViewContext<Self>) {
-        if let Some(command) = self.redo_stack.pop() {
-            let new_selection = command.execute(&mut self.content);
-            self.update_tree(command.char_range());
-            self.undo_stack.push(command);
-            self.update_selected_range(&new_selection, cx);
-        }
+        let Some(command) = self.redo_stack.pop() else {
+            return;
+        };
+
+        let new_selection = command.execute(&mut self.content);
+        self.update_tree(command.char_range());
+        self.undo_stack.push(command);
+        self.update_selected_range(&new_selection, cx);
     }
 
     pub fn insert(&mut self, text: String, cx: &mut ViewContext<Self>) {
@@ -653,65 +657,69 @@ impl TextInput {
     // - Helper
 
     fn position_from_layout(&mut self, position: usize) -> Option<Point<Pixels>> {
-        if let Some(layout) = &self.last_layout {
-            let line_idx = self.content.char_to_line(position);
-            let char_idx = self.content.line_to_byte(line_idx);
-            let cursor_idx = self.content.char_to_byte(position);
-            return Some(layout.position_for_byte_idx_in_line(cursor_idx - char_idx, line_idx));
-        }
-        None
+        let Some(layout) = &self.last_layout else {
+            return None;
+        };
+
+        let line_idx = self.content.char_to_line(position);
+        let char_idx = self.content.line_to_byte(line_idx);
+        let cursor_idx = self.content.char_to_byte(position);
+
+        Some(layout.position_for_byte_idx_in_line(cursor_idx - char_idx, line_idx))
     }
 
     fn position_for_up(&mut self) -> Option<usize> {
-        if let (Some(cursor_pos), Some(layout)) = (
+        let (Some(cursor_pos), Some(layout)) = (
             self.position_from_layout(self.cursor_offset()),
             &self.last_layout,
-        ) {
-            let y = cursor_pos.y - layout.line_height;
+        ) else {
+            return None;
+        };
 
-            if y < px(0.) {
-                return None;
-            }
+        let y = cursor_pos.y - layout.line_height;
 
-            let prev_visual_line_pos = point(cursor_pos.x, y);
-            if let Some((line_idx, pos)) = layout.byte_index_for_position(prev_visual_line_pos) {
-                let line = self.content.line_to_byte(line_idx);
-                let char = self.content.byte_to_char(line + pos);
-                return Some(char);
-            } else {
-                let line_idx = self.content.char_to_line(self.cursor_offset());
-                let line_start = self.content.line_to_char(line_idx);
-                return Some(self.previous_boundary(line_start));
-            }
+        if y < px(0.) {
+            return None;
         }
 
-        None
+        let prev_visual_line_pos = point(cursor_pos.x, y);
+        if let Some((line_idx, pos)) = layout.byte_index_for_position(prev_visual_line_pos) {
+            let line = self.content.line_to_byte(line_idx);
+            let char = self.content.byte_to_char(line + pos);
+            return Some(char);
+        } else {
+            let line_idx = self.content.char_to_line(self.cursor_offset());
+            let line_start = self.content.line_to_char(line_idx);
+            return Some(self.previous_boundary(line_start));
+        }
     }
 
     fn position_for_down(&mut self) -> Option<usize> {
-        if let (Some(cursor_pos), Some(layout)) = (
+        let (Some(cursor_pos), Some(layout)) = (
             self.position_from_layout(self.cursor_offset()),
             &self.last_layout,
-        ) {
-            let next_visual_line_pos = point(cursor_pos.x, cursor_pos.y + layout.line_height);
-            if let Some((line_idx, pos)) = layout.byte_index_for_position(next_visual_line_pos) {
-                let line = self.content.line_to_byte(line_idx);
-                return Some(self.content.byte_to_char(line + pos));
-            } else {
-                // did this line wrap?
-                let end_of_line = self.position_for_end_of_line(self.cursor_offset());
-                if let Some(end_pos) = self.position_from_layout(end_of_line) {
-                    if cursor_pos.y < end_pos.y {
-                        return Some(end_of_line);
-                    }
-                }
+        ) else {
+            return None;
+        };
 
-                // go to end of next line?
-                let current_line = self.content.char_to_line(self.cursor_offset());
-                if current_line < self.content.len_lines() {
-                    let start_of_next_line = self.content.line_to_char(current_line + 1);
-                    return Some(self.position_for_end_of_line(start_of_next_line));
+        let next_visual_line_pos = point(cursor_pos.x, cursor_pos.y + layout.line_height);
+        if let Some((line_idx, pos)) = layout.byte_index_for_position(next_visual_line_pos) {
+            let line = self.content.line_to_byte(line_idx);
+            return Some(self.content.byte_to_char(line + pos));
+        } else {
+            // did this line wrap?
+            let end_of_line = self.position_for_end_of_line(self.cursor_offset());
+            if let Some(end_pos) = self.position_from_layout(end_of_line) {
+                if cursor_pos.y < end_pos.y {
+                    return Some(end_of_line);
                 }
+            }
+
+            // go to end of next line?
+            let current_line = self.content.char_to_line(self.cursor_offset());
+            if current_line < self.content.len_lines() {
+                let start_of_next_line = self.content.line_to_char(current_line + 1);
+                return Some(self.position_for_end_of_line(start_of_next_line));
             }
         }
 
@@ -942,8 +950,8 @@ impl FocusableView for TextInput {
 impl ViewInputHandler for TextInput {
     fn text_for_range(
         &mut self,
-        range_utf16: std::ops::Range<usize>,
-        _: &mut Option<std::ops::Range<usize>>,
+        range_utf16: Range<usize>,
+        _: &mut Option<Range<usize>>,
         _: &mut ViewContext<Self>,
     ) -> Option<String> {
         Some(self.content.slice(range_utf16).to_string())
@@ -960,7 +968,7 @@ impl ViewInputHandler for TextInput {
         })
     }
 
-    fn marked_text_range(&self, _: &mut ViewContext<Self>) -> Option<std::ops::Range<usize>> {
+    fn marked_text_range(&self, _: &mut ViewContext<Self>) -> Option<Range<usize>> {
         self.marked_range.clone()
     }
 
@@ -1008,9 +1016,9 @@ impl ViewInputHandler for TextInput {
 
     fn replace_and_mark_text_in_range(
         &mut self,
-        range_utf16: Option<std::ops::Range<usize>>,
+        range_utf16: Option<Range<usize>>,
         new_text: &str,
-        new_selected_range_utf16: Option<std::ops::Range<usize>>,
+        new_selected_range_utf16: Option<Range<usize>>,
         cx: &mut ViewContext<Self>,
     ) {
         if let Some(marked_range) = self.marked_range.take() {
@@ -1033,7 +1041,7 @@ impl ViewInputHandler for TextInput {
 
     fn bounds_for_range(
         &mut self,
-        _: std::ops::Range<usize>,
+        _: Range<usize>,
         _: Bounds<Pixels>,
         _: &mut ViewContext<Self>,
     ) -> Option<Bounds<Pixels>> {

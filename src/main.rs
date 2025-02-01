@@ -266,7 +266,7 @@ fn main() {
 
             #[cfg(not(debug_assertions))]
             {
-                open_window(None, cx);
+                open_window(None, None, cx);
             }
         }
 
