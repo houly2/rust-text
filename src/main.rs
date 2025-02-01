@@ -1,5 +1,5 @@
 use assets::Assets;
-use db::{DbConnection, DB};
+use db::{DbConnection, MyUuid, DB};
 use editor::editor::*;
 use futures::channel::mpsc;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -21,9 +21,9 @@ use crate::theme_manager::ActiveTheme;
 
 actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew, Open]);
 
-fn bounds_for_path(path: &Option<PathBuf>, cx: &AppContext) -> WindowBounds {
+fn bounds_for_path(path: &Option<&PathBuf>, cx: &AppContext) -> WindowBounds {
     if let Some(path) = path {
-        if let Some(positions) = cx.db_connection().window_position(path.clone()) {
+        if let Some(positions) = cx.db_connection().window_position(path) {
             for display in cx.displays() {
                 let Ok(display_uuid) = display.uuid() else {
                     continue;
@@ -43,7 +43,7 @@ fn bounds_for_path(path: &Option<PathBuf>, cx: &AppContext) -> WindowBounds {
     WindowBounds::Windowed(Bounds::centered(None, size(px(400.), px(320.)), cx))
 }
 
-fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
+fn open_window(file_id: Option<MyUuid>, file_path: Option<&PathBuf>, cx: &mut AppContext) {
     let window = cx
         .open_window(
             WindowOptions {
@@ -52,15 +52,17 @@ fn open_window(path: Option<PathBuf>, cx: &mut AppContext) {
                     appears_transparent: true,
                     traffic_light_position: Some(point(px(9.0), px(9.0))),
                 }),
-                window_bounds: Some(bounds_for_path(&path, cx)),
+                window_bounds: Some(bounds_for_path(&file_path, cx)),
                 window_min_size: Some(size(px(200.), px(160.))),
                 ..Default::default()
             },
             |cx| {
                 let editor = cx.new_view(|cx| {
-                    let mut element = Editor::new(cx);
+                    let file_id = cx.db_connection().open_windows_add(file_id, file_path);
 
-                    if let Some(path) = path {
+                    let mut element = Editor::new(file_id, cx);
+
+                    if let Some(path) = file_path {
                         element.read_file(&path, cx);
                     }
 
@@ -93,7 +95,7 @@ fn open_file(cx: &mut AppContext) {
                 if let Some(path) = paths.first() {
                     cx.update(|cx| {
                         cx.add_recent_document(path);
-                        open_window(Some(path.to_path_buf()), cx);
+                        open_window(None, Some(&path.to_path_buf()), cx);
                     })
                     .ok();
                 }
@@ -186,7 +188,7 @@ fn main() {
         cx.on_action(|_: &Hide, cx| cx.hide());
         cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
         cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
-        cx.on_action(|_: &FileNew, cx| open_window(None, cx));
+        cx.on_action(|_: &FileNew, cx| open_window(None, None, cx));
         cx.on_action(|_: &Open, cx| open_file(cx));
 
         cx.set_menus(vec![
@@ -237,15 +239,28 @@ fn main() {
             },
         ]);
 
+        let mut opened_a_window = false;
+
+        if let Some(open_windows) = cx.db_connection().open_windows() {
+            for old_window in open_windows {
+                let file_path = old_window
+                    .file_path
+                    .as_ref()
+                    .map(|f| std::path::Path::new(f).to_path_buf());
+                open_window(Some(old_window.file_id), file_path.as_ref(), cx);
+                opened_a_window = true;
+            }
+        }
+
         if let Some(urls) = open_rx.try_next().ok().flatten() {
             for url in urls {
-                open_window(Some(PathBuf::from(url)), cx);
+                open_window(None, Some(&PathBuf::from(url)), cx);
             }
-        } else {
+        } else if !opened_a_window {
             #[cfg(debug_assertions)]
             {
-                let path = PathBuf::from("/Users/philipwagner/Documents/rust/text/test/test.md");
-                open_window(Some(path), cx);
+                let path = PathBuf::from("/Users/philipwagner/Documents/rust/text/test/test.txt");
+                open_window(None, Some(&path), cx);
             }
 
             #[cfg(not(debug_assertions))]
@@ -258,7 +273,7 @@ fn main() {
             while let Some(urls) = open_rx.next().await {
                 cx.update(|cx| {
                     for url in urls {
-                        open_window(Some(PathBuf::from(url)), cx);
+                        open_window(None, Some(&PathBuf::from(url)), cx);
                     }
                 })
                 .ok();

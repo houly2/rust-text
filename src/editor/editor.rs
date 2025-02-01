@@ -7,7 +7,7 @@ use std::{
 use gpui::*;
 
 use crate::{
-    db::DbConnection,
+    db::{DbConnection, MyUuid},
     settings_manager::CurrentSettings,
     theme_manager::ActiveTheme,
     views::text_input::text_input::{TextInput, TextInputMode},
@@ -32,6 +32,7 @@ actions!(
 );
 
 pub struct Editor {
+    file_id: MyUuid,
     text_input: View<TextInput>,
     title_bar: View<TitleBar>,
     status_bar: View<StatusBar>,
@@ -42,11 +43,14 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(cx: &mut ViewContext<Self>) -> Self {
+    pub fn new(file_id: MyUuid, cx: &mut ViewContext<Self>) -> Self {
         let handle = cx.view().downgrade();
         cx.on_window_should_close(move |cx| {
             handle
-                .update(cx, |this, cx| this.allowed_to_close_window(cx))
+                .update(cx, |this, cx| {
+                    cx.db_connection().open_windows_remove(this.file_id);
+                    this.allowed_to_close_window(cx)
+                })
                 .unwrap_or(true)
         });
 
@@ -96,6 +100,7 @@ impl Editor {
         })];
 
         Self {
+            file_id,
             text_input,
             title_bar,
             status_bar,

@@ -1,13 +1,11 @@
-use std::{path::PathBuf, sync::Arc};
-
 use anyhow::Result;
-
 use gpui::{point, size, AppContext, Bounds, Global, Pixels};
 use rusqlite::{
     params,
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     Connection, ToSql,
 };
+use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
 use crate::paths::app_data_path;
@@ -51,6 +49,15 @@ const MIGRATIONS: &'static [Migration] = &[
             created_at  TEXT DEFAULT current_timestamp
         )",
     },
+    Migration {
+        migration: "3_create_open_windows",
+        statement: "CREATE TABLE open_windows (
+            id          INTEGER PRIMARY KEY,
+            file_id     BLOB NOT NULL UNIQUE,
+            file_path   TEXT DEFAULT NULL,
+            created_at  TEXT DEFAULT current_timestamp
+        )",
+    },
 ];
 
 #[derive(Debug)]
@@ -82,7 +89,7 @@ impl DB {
         Ok(())
     }
 
-    pub fn window_position(&self, file_path: PathBuf) -> Option<Vec<WindowPosition>> {
+    pub fn window_position(&self, file_path: &PathBuf) -> Option<Vec<WindowPosition>> {
         let file_path_str = file_path.to_str()?;
 
         let mut stmt = self
@@ -169,6 +176,52 @@ impl DB {
         );
     }
 
+
+    pub fn open_windows(&self) -> Option<Vec<OldOpenWindow>> {
+        Some(
+            self.connection
+                .prepare(
+                    "SELECT file_id, file_path
+                    FROM open_windows",
+                )
+                .ok()?
+                .query_map((), |row| {
+                    Ok(OldOpenWindow {
+                        file_id: row.get(0)?,
+                        file_path: row.get(1).ok(),
+                    })
+                })
+                .ok()?
+                .filter_map(|m| m.ok())
+                .collect(),
+        )
+    }
+
+    pub fn open_windows_add(&self, file_id: Option<MyUuid>, file_path: Option<&PathBuf>) -> MyUuid {
+        let file_id = file_id.unwrap_or(MyUuid { 0: Uuid::new_v4() });
+
+        if let Some(file_path_str) = file_path.map(|f| f.to_str()) {
+            _ = self.connection.execute(
+                "INSERT INTO open_windows (file_id, file_path) VALUES (?1, ?2)",
+                params![file_id, file_path_str],
+            );
+        } else {
+            _ = self.connection.execute(
+                "INSERT INTO open_windows (file_id) VALUES (?1)",
+                params![file_id],
+            );
+        };
+
+        file_id
+    }
+
+    pub fn open_windows_remove(&self, file_id: MyUuid) {
+        _ = self.connection.execute(
+            "DELETE FROM open_windows WHERE file_id = ?1",
+            params![file_id],
+        );
+    }
+
     fn cleanup(connection: &Connection) -> Result<()> {
         connection.execute_batch(
             "
@@ -251,7 +304,7 @@ impl ToSql for MyPixels {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct MyUuid(Uuid);
 
 impl FromSql for MyUuid {
@@ -277,4 +330,9 @@ impl PartialEq<Uuid> for MyUuid {
     fn eq(&self, other: &Uuid) -> bool {
         self.0 == *other
     }
+}
+
+pub struct OldOpenWindow {
+    pub file_id: MyUuid,
+    pub file_path: Option<String>,
 }
