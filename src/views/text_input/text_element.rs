@@ -287,7 +287,7 @@ impl TextElement {
                 color: hsla(0., 0., 0.4, 1.0),
                 ..base_run
             }),
-            "property" | "tag" => Some(TextRun {
+            "property" | "tag" | "text.literal" | "text.uri" | "text.reference" => Some(TextRun {
                 color: hsla(0.06, 0.92, 0.75, 1.0),
                 ..base_run
             }),
