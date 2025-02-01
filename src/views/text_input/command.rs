@@ -69,6 +69,6 @@ impl Command for DeleteCommand {
     }
 
     fn char_range(&self) -> Range<usize> {
-        self.position + self.text.chars().count()..self.position
+        self.position..self.position - self.text.chars().count()
     }
 }
