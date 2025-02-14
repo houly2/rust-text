@@ -227,12 +227,12 @@ impl TextInput {
         RefCell::borrow_mut(&self.on_next_paint_stack).push(Box::new(on_notify));
     }
 
-    fn update_tree(&mut self, char_range: Range<usize>) {
-        let start_byte = self.content.char_to_byte(char_range.start);
-        let end_byte = self.content.char_to_byte(char_range.end);
+    fn update_tree(&mut self, char_range: Range<usize>, snapshot: Rope) {
+        let start_byte = snapshot.char_to_byte(char_range.start);
+        let end_byte = snapshot.char_to_byte(char_range.end);
 
-        let start_line = self.content.byte_to_line(start_byte);
-        let end_line = self.content.byte_to_line(end_byte);
+        let start_line = snapshot.byte_to_line(start_byte);
+        let end_line = snapshot.byte_to_line(end_byte);
 
         if let Some(mut tree) = self.parse_tree.take() {
             tree.edit(&InputEdit {
@@ -255,8 +255,14 @@ impl TextInput {
     }
 
     fn execute_command(&mut self, command: Box<dyn Command>, cx: &mut ViewContext<Self>) {
-        command.execute(&mut self.content);
-        self.update_tree(command.char_range());
+        if command.update_tree_before() {
+            let snapshot = self.content.clone();
+            command.execute(&mut self.content);
+            self.update_tree(command.char_range(), snapshot);
+        } else {
+            command.execute(&mut self.content);
+            self.update_tree(command.char_range(), self.content.clone());
+        }
 
         self.undo_stack.push(command);
         self.redo_stack.clear();
@@ -270,11 +276,19 @@ impl TextInput {
             return;
         };
 
-        let prev_selection = command.undo(&mut self.content);
         let r = command.char_range();
-        self.update_tree(r.end..r.start);
+        if !command.update_tree_before() {
+            let snapshot = self.content.clone();
+            let prev_selection = command.undo(&mut self.content);
+            self.update_tree(r.end..r.start, snapshot);
+            self.update_selected_range(&prev_selection, cx);
+        } else {
+            let prev_selection = command.undo(&mut self.content);
+            self.update_tree(r.end..r.start, self.content.clone());
+            self.update_selected_range(&prev_selection, cx);
+        }
+
         self.redo_stack.push(command);
-        self.update_selected_range(&prev_selection, cx);
     }
 
     pub fn redo(&mut self, _: &Redo, cx: &mut ViewContext<Self>) {
@@ -282,8 +296,9 @@ impl TextInput {
             return;
         };
 
+        let snapshot = self.content.clone();
         let new_selection = command.execute(&mut self.content);
-        self.update_tree(command.char_range());
+        self.update_tree(command.char_range(), snapshot);
         self.undo_stack.push(command);
         self.update_selected_range(&new_selection, cx);
     }

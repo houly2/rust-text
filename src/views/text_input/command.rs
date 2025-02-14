@@ -6,6 +6,7 @@ pub trait Command {
     fn execute(&self, content: &mut Rope) -> Range<usize>;
     fn undo(&self, content: &mut Rope) -> Range<usize>;
     fn char_range(&self) -> Range<usize>;
+    fn update_tree_before(&self) -> bool;
 }
 
 pub struct InsertCommand {
@@ -39,6 +40,10 @@ impl Command for InsertCommand {
     fn char_range(&self) -> Range<usize> {
         self.position..self.position + self.text.chars().count()
     }
+
+    fn update_tree_before(&self) -> bool {
+        false
+    }
 }
 
 pub struct DeleteCommand {
@@ -69,6 +74,10 @@ impl Command for DeleteCommand {
     }
 
     fn char_range(&self) -> Range<usize> {
-        self.position..self.position - self.text.chars().count()
+        self.position..self.position + self.text.chars().count()
+    }
+
+    fn update_tree_before(&self) -> bool {
+        true
     }
 }
