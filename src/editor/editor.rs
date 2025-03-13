@@ -92,15 +92,14 @@ impl Editor {
                                 let text_input = this.text_input.read(cx);
                                 let path = text_input
                                     .file_path()
-                                    .as_ref()
-                                    .map(|p| p.clone())
+                                    .clone()
                                     .unwrap_or(Path::new("").to_path_buf());
 
                                 cx.db_connection().update_window_position(
                                     &path,
                                     display_uuid,
                                     bounds,
-                                )
+                                );
                             }
                         }
                         this.bounds_save_task_queue.take();
@@ -174,7 +173,7 @@ impl Editor {
         self.text_input.update(cx, |this, cx| {
             this.set_file_path(path.into(), cx);
             if let Some(new_content) = new_content {
-                this.insert(new_content, cx);
+                this.insert(&new_content, cx);
             }
             this.mark_dirty(is_dirty, cx);
             this.move_to(0, cx);
@@ -188,10 +187,10 @@ impl Editor {
     fn save_file(&mut self, path: PathBuf, cx: &mut ViewContext<Self>) {
         let text_input = self.text_input.read(cx);
         match fs::write(path.clone(), text_input.content.to_string()) {
-            Ok(_) => self
+            Ok(()) => self
                 .text_input
                 .update(cx, |this, cx| this.mark_dirty(false, cx)),
-            Err(error) => println!("{:?}", error),
+            Err(error) => println!("{error:?}"),
         }
 
         cx.db_connection()
@@ -211,8 +210,7 @@ impl Editor {
         cx.spawn(|weak_view, cx| async move {
             match Flatten::flatten(path.await.map_err(|e| e.into())) {
                 Ok(Some(path)) => callback(weak_view, Some(&path), cx),
-                Ok(None) => callback(weak_view, None, cx),
-                Err(_) => callback(weak_view, None, cx),
+                Ok(None) | Err(_) => callback(weak_view, None, cx),
             }
         })
         .detach();
@@ -239,40 +237,41 @@ impl Editor {
 
     fn allowed_to_close_window(&self, cx: &mut ViewContext<Self>) -> bool {
         if !self.text_input.read(cx).is_dirty() {
-            true
-        } else {
-            let message = "Close without saving?";
-            let detail = "Data will be lost";
-            let prompt = cx.prompt(
-                PromptLevel::Info,
-                message,
-                Some(detail),
-                &["Save", "Don't Save", "Abort"],
-            );
-            cx.spawn(|this, mut cx| async move {
-                match prompt.await.ok() {
-                    Some(0) => this.update(&mut cx, |this, cx| {
-                        this.save(cx);
-                        cx.remove_window();
-                    }),
-                    Some(1) => this.update(&mut cx, |_, cx| cx.remove_window()),
-                    Some(2) | Some(3_usize..) | None => Ok(()),
-                }
-            })
-            .detach();
-            false
+            return true;
         }
+
+        let message = "Close without saving?";
+        let detail = "Data will be lost";
+        let prompt = cx.prompt(
+            PromptLevel::Info,
+            message,
+            Some(detail),
+            &["Save", "Don't Save", "Abort"],
+        );
+        cx.spawn(|this, mut cx| async move {
+            match prompt.await.ok() {
+                Some(0) => this.update(&mut cx, |this, cx| {
+                    this.save(cx);
+                    cx.remove_window();
+                }),
+                Some(1) => this.update(&mut cx, |_, cx| cx.remove_window()),
+                Some(2 | 3_usize..) | None => Ok(()),
+            }
+        })
+        .detach();
+
+        false
     }
 
     fn toggle_modal(&mut self, _: &ToggleTheme, cx: &mut ViewContext<Self>) {
         self.modal_manager.update(cx, |modal_layer, cx| {
-            modal_layer.toggle_modal(cx, ThemeSelector::new)
+            modal_layer.toggle_modal(cx, ThemeSelector::new);
         });
     }
 
     fn open_search(&mut self, _: &Search, cx: &mut ViewContext<Self>) {
         self.search_view
-            .update(cx, |search_view, cx| search_view.show(cx))
+            .update(cx, |search_view, cx| search_view.show(cx));
     }
 }
 

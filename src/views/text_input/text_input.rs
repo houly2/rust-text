@@ -1,6 +1,6 @@
 use gpui::*;
 use prelude::FluentBuilder;
-use ropey::*;
+use ropey::Rope;
 use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -173,7 +173,7 @@ impl TextInput {
             scroll_manager: scroll_manager.clone(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
-            on_next_paint_stack: Default::default(),
+            on_next_paint_stack: Rc::default(),
             is_dirty: false,
             current_file_path: None,
             settings_soft_wrap: false,
@@ -203,11 +203,11 @@ impl TextInput {
                 }),
                 cx.on_focus_in(&focus_handle, |this, cx| {
                     this.blink_manager
-                        .update(cx, |blink_manager, cx| blink_manager.enable(cx))
+                        .update(cx, |blink_manager, cx| blink_manager.enable(cx));
                 }),
                 cx.on_focus_out(&focus_handle, |this, _, cx| {
                     this.blink_manager
-                        .update(cx, |blink_manager, _| blink_manager.disable())
+                        .update(cx, |blink_manager, _| blink_manager.disable());
                 }),
             ],
         }
@@ -227,7 +227,7 @@ impl TextInput {
         RefCell::borrow_mut(&self.on_next_paint_stack).push(Box::new(on_notify));
     }
 
-    fn update_tree(&mut self, char_range: Range<usize>, snapshot: Rope) {
+    fn update_tree(&mut self, char_range: Range<usize>, snapshot: &Rope) {
         let start_byte = snapshot.char_to_byte(char_range.start);
         let end_byte = snapshot.char_to_byte(char_range.end);
 
@@ -258,10 +258,10 @@ impl TextInput {
         if command.update_tree_before() {
             let snapshot = self.content.clone();
             command.execute(&mut self.content);
-            self.update_tree(command.char_range(), snapshot);
+            self.update_tree(command.char_range(), &snapshot);
         } else {
             command.execute(&mut self.content);
-            self.update_tree(command.char_range(), self.content.clone());
+            self.update_tree(command.char_range(), &self.content.clone());
         }
 
         self.undo_stack.push(command);
@@ -277,14 +277,14 @@ impl TextInput {
         };
 
         let r = command.char_range();
-        if !command.update_tree_before() {
-            let snapshot = self.content.clone();
+        if command.update_tree_before() {
             let prev_selection = command.undo(&mut self.content);
-            self.update_tree(r.end..r.start, snapshot);
+            self.update_tree(r.end..r.start, &self.content.clone());
             self.update_selected_range(&prev_selection, cx);
         } else {
+            let snapshot = self.content.clone();
             let prev_selection = command.undo(&mut self.content);
-            self.update_tree(r.end..r.start, self.content.clone());
+            self.update_tree(r.end..r.start, &snapshot);
             self.update_selected_range(&prev_selection, cx);
         }
 
@@ -298,12 +298,12 @@ impl TextInput {
 
         let snapshot = self.content.clone();
         let new_selection = command.execute(&mut self.content);
-        self.update_tree(command.char_range(), snapshot);
+        self.update_tree(command.char_range(), &snapshot);
         self.undo_stack.push(command);
         self.update_selected_range(&new_selection, cx);
     }
 
-    pub fn insert(&mut self, text: String, cx: &mut ViewContext<Self>) {
+    pub fn insert(&mut self, text: &str, cx: &mut ViewContext<Self>) {
         self.replace_text_in_range(None, &text, cx);
     }
 
@@ -349,7 +349,7 @@ impl TextInput {
         if self.selected_range.is_empty() {
             self.move_to(self.previous_boundary(self.cursor_offset()), cx);
         } else {
-            self.move_to(self.selected_range.start, cx)
+            self.move_to(self.selected_range.start, cx);
         }
     }
 
@@ -357,19 +357,19 @@ impl TextInput {
         if self.selected_range.is_empty() {
             self.move_to(self.next_boundary(self.selected_range.end), cx);
         } else {
-            self.move_to(self.selected_range.end, cx)
+            self.move_to(self.selected_range.end, cx);
         }
     }
 
     fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
         if let Some(pos) = self.position_for_up() {
-            self.move_to(pos, cx)
+            self.move_to(pos, cx);
         }
     }
 
     fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
         if let Some(pos) = self.position_for_down() {
-            self.move_to(pos, cx)
+            self.move_to(pos, cx);
         }
     }
 
@@ -382,11 +382,7 @@ impl TextInput {
     }
 
     fn copy(&mut self, _: &Copy, cx: &mut ViewContext<Self>) {
-        if !self.selected_range.is_empty() {
-            cx.write_to_clipboard(ClipboardItem::new_string(
-                self.content.slice(self.selected_range.clone()).to_string(),
-            ));
-        } else {
+        if self.selected_range.is_empty() {
             let start_of_line_idx = self.position_for_start_of_line();
             let end_of_line_idx =
                 self.next_boundary(self.position_for_end_of_line(self.cursor_offset()));
@@ -394,6 +390,10 @@ impl TextInput {
                 self.content
                     .slice(start_of_line_idx..end_of_line_idx)
                     .to_string(),
+            ));
+        } else {
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                self.content.slice(self.selected_range.clone()).to_string(),
             ));
         }
     }
@@ -405,12 +405,7 @@ impl TextInput {
     }
 
     fn cut(&mut self, _: &Cut, cx: &mut ViewContext<Self>) {
-        if !self.selected_range.is_empty() {
-            cx.write_to_clipboard(ClipboardItem::new_string(
-                self.content.slice(self.selected_range.clone()).to_string(),
-            ));
-            self.replace_text_in_range(None, "", cx);
-        } else {
+        if self.selected_range.is_empty() {
             let start_of_line_idx = self.position_for_start_of_line();
             let end_of_line_idx =
                 self.next_boundary(self.position_for_end_of_line(self.cursor_offset()));
@@ -420,6 +415,11 @@ impl TextInput {
                     .to_string(),
             ));
             self.replace_text_in_range(Some(start_of_line_idx..end_of_line_idx), "", cx);
+        } else {
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                self.content.slice(self.selected_range.clone()).to_string(),
+            ));
+            self.replace_text_in_range(None, "", cx);
         }
     }
 
@@ -433,7 +433,7 @@ impl TextInput {
             {
                 self.is_scroll_dragging = true;
                 self.scroll_manager.update(cx, |this, cx| {
-                    this.scroll_to(event.position, lines, bounds, cx)
+                    this.scroll_to(event.position, lines, bounds, cx);
                 });
                 return;
             }
@@ -455,7 +455,7 @@ impl TextInput {
             let end_of_line_idx = self.position_for_end_of_line(self.cursor_offset());
             self.select_to(end_of_line_idx, cx);
         } else {
-            self.move_to(self.index_for_mouse_position(event.position), cx)
+            self.move_to(self.index_for_mouse_position(event.position), cx);
         }
     }
 
@@ -472,7 +472,7 @@ impl TextInput {
                 (self.last_bounds.as_ref(), self.last_layout.as_ref())
             {
                 self.scroll_manager.update(cx, |this, cx| {
-                    this.scroll_to(event.position, lines, bounds, cx)
+                    this.scroll_to(event.position, lines, bounds, cx);
                 });
             }
         }
@@ -523,8 +523,8 @@ impl TextInput {
         if let (Some(lines), Some(bounds)) = (self.last_layout.as_ref(), self.last_bounds.as_ref())
         {
             self.scroll_manager.update(cx, |this, cx| {
-                this.calc_offset_after_scroll(event.delta, lines, bounds, cx)
-            })
+                this.calc_offset_after_scroll(event.delta, lines, bounds, cx);
+            });
         };
     }
 
@@ -571,7 +571,7 @@ impl TextInput {
 
     fn select_line_start(&mut self, _: &SelectLineStart, cx: &mut ViewContext<Self>) {
         let start_of_line_idx = self.position_for_start_of_line();
-        self.select_to(start_of_line_idx, cx)
+        self.select_to(start_of_line_idx, cx);
     }
 
     fn select_line_end(&mut self, _: &SelectLineEnd, cx: &mut ViewContext<Self>) {
@@ -579,20 +579,20 @@ impl TextInput {
     }
 
     fn move_to_word_start(&mut self, _: &MoveToWordStart, cx: &mut ViewContext<Self>) {
-        self.move_to(self.start_of_word(self.cursor_offset()), cx)
+        self.move_to(self.start_of_word(self.cursor_offset()), cx);
     }
 
     fn move_to_word_end(&mut self, _: &MoveToWordEnd, cx: &mut ViewContext<Self>) {
-        self.move_to(self.end_of_word(self.cursor_offset()), cx)
+        self.move_to(self.end_of_word(self.cursor_offset()), cx);
     }
 
     fn move_to_line_start(&mut self, _: &MoveToLineStart, cx: &mut ViewContext<Self>) {
         let start_of_line_idx = self.position_for_start_of_line();
-        self.move_to(start_of_line_idx, cx)
+        self.move_to(start_of_line_idx, cx);
     }
 
     fn move_to_line_end(&mut self, _: &MoveToLineEnd, cx: &mut ViewContext<Self>) {
-        self.move_to(self.position_for_end_of_line(self.cursor_offset()), cx)
+        self.move_to(self.position_for_end_of_line(self.cursor_offset()), cx);
     }
 
     fn move_to_doc_start(&mut self, _: &MoveToDocStart, cx: &mut ViewContext<Self>) {
@@ -637,7 +637,7 @@ impl TextInput {
                     lines,
                     bounds,
                     cx,
-                )
+                );
             });
         }
     }
@@ -652,7 +652,7 @@ impl TextInput {
 
     fn select_to(&mut self, offset: usize, cx: &mut ViewContext<Self>) {
         if self.selection_reversed {
-            self.selected_range.start = offset
+            self.selected_range.start = offset;
         } else {
             self.selected_range.end = offset;
         }
@@ -701,11 +701,11 @@ impl TextInput {
         if let Some((line_idx, pos)) = layout.byte_index_for_position(prev_visual_line_pos) {
             let line = self.content.line_to_byte(line_idx);
             let char = self.content.byte_to_char(line + pos);
-            return Some(char);
+            Some(char)
         } else {
             let line_idx = self.content.char_to_line(self.cursor_offset());
             let line_start = self.content.line_to_char(line_idx);
-            return Some(self.previous_boundary(line_start));
+            Some(self.previous_boundary(line_start))
         }
     }
 
@@ -721,21 +721,21 @@ impl TextInput {
         if let Some((line_idx, pos)) = layout.byte_index_for_position(next_visual_line_pos) {
             let line = self.content.line_to_byte(line_idx);
             return Some(self.content.byte_to_char(line + pos));
-        } else {
-            // did this line wrap?
-            let end_of_line = self.position_for_end_of_line(self.cursor_offset());
-            if let Some(end_pos) = self.position_from_layout(end_of_line) {
-                if cursor_pos.y < end_pos.y {
-                    return Some(end_of_line);
-                }
-            }
+        }
 
-            // go to end of next line?
-            let current_line = self.content.char_to_line(self.cursor_offset());
-            if current_line < self.content.len_lines() {
-                let start_of_next_line = self.content.line_to_char(current_line + 1);
-                return Some(self.position_for_end_of_line(start_of_next_line));
+        // did this line wrap?
+        let end_of_line = self.position_for_end_of_line(self.cursor_offset());
+        if let Some(end_pos) = self.position_from_layout(end_of_line) {
+            if cursor_pos.y < end_pos.y {
+                return Some(end_of_line);
             }
+        }
+
+        // go to end of next line?
+        let current_line = self.content.char_to_line(self.cursor_offset());
+        if current_line < self.content.len_lines() {
+            let start_of_next_line = self.content.line_to_char(current_line + 1);
+            return Some(self.position_for_end_of_line(start_of_next_line));
         }
 
         None
@@ -782,13 +782,11 @@ impl TextInput {
         for ch in self.content.chars_at(t).reversed() {
             if !consumed_all_punctuation {
                 consumed_all_punctuation = CharKind::kind(ch) != CharKind::Punctuation;
-            } else {
-                if let Some(prev_ch) = prev_ch {
-                    if CharKind::kind(prev_ch) != CharKind::kind(ch)
-                        && CharKind::kind(prev_ch) != CharKind::WhiteSpace
-                    {
-                        break;
-                    }
+            } else if let Some(prev_ch) = prev_ch {
+                if CharKind::kind(prev_ch) != CharKind::kind(ch)
+                    && CharKind::kind(prev_ch) != CharKind::WhiteSpace
+                {
+                    break;
                 }
             }
 
@@ -807,13 +805,11 @@ impl TextInput {
         for ch in self.content.chars_at(t) {
             if !consumed_all_punctuation {
                 consumed_all_punctuation = CharKind::kind(ch) != CharKind::Punctuation;
-            } else {
-                if let Some(prev_ch) = prev_ch {
-                    if CharKind::kind(prev_ch) != CharKind::kind(ch)
-                        && CharKind::kind(prev_ch) != CharKind::WhiteSpace
-                    {
-                        break;
-                    }
+            } else if let Some(prev_ch) = prev_ch {
+                if CharKind::kind(prev_ch) != CharKind::kind(ch)
+                    && CharKind::kind(prev_ch) != CharKind::WhiteSpace
+                {
+                    break;
                 }
             }
 
@@ -1045,10 +1041,10 @@ impl ViewInputHandler for TextInput {
 
             let l = new_text.chars().count();
             self.marked_range = Some(range.start..range.start + l);
-            self.selected_range = new_selected_range_utf16
-                .as_ref()
-                .map(|new_range| new_range.start + range.start..new_range.end + range.end)
-                .unwrap_or_else(|| range.start + l..range.start + l);
+            self.selected_range = new_selected_range_utf16.as_ref().map_or_else(
+                || range.start + l..range.start + l,
+                |new_range| new_range.start + range.start..new_range.end + range.end,
+            );
         }
 
         cx.notify();

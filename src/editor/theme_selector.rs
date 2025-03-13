@@ -68,7 +68,7 @@ impl ThemeSelector {
     }
 
     fn close(&mut self, _: &Close, cx: &mut ViewContext<Self>) {
-        cx.emit(DismissEvent)
+        cx.emit(DismissEvent);
     }
 }
 

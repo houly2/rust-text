@@ -77,7 +77,7 @@ impl ThemeManager {
     }
 
     pub fn set_theme(&mut self, new_theme: &Theme) {
-        self.active_theme = Arc::new(new_theme.clone())
+        self.active_theme = Arc::new(new_theme.clone());
     }
 }
 

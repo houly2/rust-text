@@ -21,7 +21,7 @@ impl StatusBar {
         };
 
         text_input.update(cx, |this, cx| {
-            this.set_soft_wrap(!this.soft_wrap_enabled(), cx)
+            this.set_soft_wrap(!this.soft_wrap_enabled(), cx);
         });
     }
 
@@ -34,7 +34,7 @@ impl StatusBar {
 
     fn selection_format(&self, cx: &mut ViewContext<Self>) -> String {
         let Some(text_input) = self.text_input.upgrade() else {
-            return "".to_string();
+            return String::new();
         };
 
         let text_input = text_input.read(cx);
@@ -43,7 +43,9 @@ impl StatusBar {
         let line_char_idx = text_input.content.line_to_char(line_idx);
         let char_idx_in_line = text_input.cursor_offset() - line_char_idx;
 
-        let selection = if !text_input.selected_range.is_empty() {
+        let selection = if text_input.selected_range.is_empty() {
+            String::new()
+        } else {
             let start_line_idx = text_input
                 .content
                 .char_to_line(text_input.selected_range.start);
@@ -67,8 +69,6 @@ impl StatusBar {
                         .abs()
                 )
             }
-        } else {
-            "".to_string()
         };
 
         format!("{}:{}{}", line_idx + 1, char_idx_in_line + 1, selection)

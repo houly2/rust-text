@@ -50,6 +50,6 @@ impl CurrentSettings for AppContext {
     }
 
     fn change_theme(&mut self, new_theme: &Theme) {
-        let _ = &self.global_mut::<ThemeManager>().set_theme(new_theme);
+        let () = &self.global_mut::<ThemeManager>().set_theme(new_theme);
     }
 }

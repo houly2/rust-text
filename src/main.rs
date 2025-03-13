@@ -21,7 +21,7 @@ use crate::theme_manager::ActiveTheme;
 
 actions!(set_menus, [Quit, Hide, HideOthers, ShowAll, FileNew, Open]);
 
-fn bounds_for_path(path: &Option<&PathBuf>, cx: &AppContext) -> WindowBounds {
+fn bounds_for_path(path: Option<&PathBuf>, cx: &AppContext) -> WindowBounds {
     if let Some(path) = path {
         if let Some(positions) = cx.db_connection().window_position(path) {
             for display in cx.displays() {
@@ -52,7 +52,7 @@ fn open_window(file_id: Option<MyUuid>, file_path: Option<&PathBuf>, cx: &mut Ap
                     appears_transparent: true,
                     traffic_light_position: Some(point(px(9.0), px(9.0))),
                 }),
-                window_bounds: Some(bounds_for_path(&file_path, cx)),
+                window_bounds: Some(bounds_for_path(file_path, cx)),
                 window_min_size: Some(size(px(200.), px(160.))),
                 ..Default::default()
             },
@@ -64,7 +64,7 @@ fn open_window(file_id: Option<MyUuid>, file_path: Option<&PathBuf>, cx: &mut Ap
                     let mut element = Editor::new(file_id, cx);
 
                     if let Some(path) = file_path {
-                        element.read_file(&path, unsaved_content, cx);
+                        element.read_file(path, unsaved_content, cx);
                     }
 
                     element
@@ -91,18 +91,14 @@ fn open_file(cx: &mut AppContext) {
     });
 
     cx.spawn(|cx| async move {
-        match Flatten::flatten(paths.await.map_err(|e| e.into())) {
-            Ok(Some(paths)) => {
-                if let Some(path) = paths.first() {
-                    cx.update(|cx| {
-                        cx.add_recent_document(path);
-                        open_window(None, Some(&path.to_path_buf()), cx);
-                    })
-                    .ok();
-                }
+        if let Ok(Some(paths)) = Flatten::flatten(paths.await.map_err(|e| e.into())) {
+            if let Some(path) = paths.first() {
+                cx.update(|cx| {
+                    cx.add_recent_document(path);
+                    open_window(None, Some(&path.clone()), cx);
+                })
+                .ok();
             }
-            Ok(None) => {}
-            Err(_) => {}
         }
     })
     .detach();
@@ -260,7 +256,7 @@ fn main() {
         } else if !opened_a_window {
             #[cfg(debug_assertions)]
             {
-                let path = PathBuf::from("/Users/philipwagner/Documents/rust/text/test/test.txt");
+                let path = PathBuf::from("/Users/philipwagner/Documents/rust/text/test/test.md");
                 open_window(None, Some(&path), cx);
             }
 

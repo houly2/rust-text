@@ -13,11 +13,11 @@ pub enum Icons {
 }
 
 impl Icons {
-    pub fn path(&self) -> impl Into<SharedString> {
-        format!("icons/{}.svg", self)
+    pub fn path(self) -> impl Into<SharedString> {
+        format!("icons/{self}.svg")
     }
 
-    pub fn as_button(&self, active: bool) -> impl IntoElement {
-        IconButton::new(*self).selected(active)
+    pub fn as_button(self, active: bool) -> impl IntoElement {
+        IconButton::new(self).selected(active)
     }
 }

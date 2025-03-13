@@ -35,57 +35,54 @@ pub struct LanguageConfigManager {
 
 impl LanguageConfigManager {
     pub fn new() -> Self {
-        let mut language_configs = Vec::new();
-
-        language_configs.push(Arc::new(LanguageConfig::new(
-            "markdown",
-            vec!["md"],
-            tree_sitter_md::LANGUAGE.into(),
-            Some(Self::load_query(
-                &tree_sitter_md::LANGUAGE.into(),
-                include_str!("../../languages/markdown/injections.scm"),
+        let language_configs = vec![
+            Arc::new(LanguageConfig::new(
+                "markdown",
+                vec!["md"],
+                tree_sitter_md::LANGUAGE.into(),
+                Some(Self::load_query(
+                    &tree_sitter_md::LANGUAGE.into(),
+                    include_str!("../../languages/markdown/injections.scm"),
+                )),
+                Self::load_query(
+                    &tree_sitter_md::LANGUAGE.into(),
+                    include_str!("../../languages/markdown/highlights.scm"),
+                ),
             )),
-            Self::load_query(
-                &tree_sitter_md::LANGUAGE.into(),
-                include_str!("../../languages/markdown/highlights.scm"),
-            ),
-        )));
-
-        language_configs.push(Arc::new(LanguageConfig::new(
-            "markdown_inline",
-            vec![],
-            tree_sitter_md::INLINE_LANGUAGE.into(),
-            None,
-            Self::load_query(
-                &tree_sitter_md::INLINE_LANGUAGE.into(),
-                include_str!("../../languages/markdown-inline/highlights.scm"),
-            ),
-        )));
-
-        language_configs.push(Arc::new(LanguageConfig::new(
-            "yml",
-            vec!["yaml", "yml"],
-            tree_sitter_yaml::LANGUAGE.into(),
-            None,
-            Self::load_query(
-                &tree_sitter_yaml::LANGUAGE.into(),
-                tree_sitter_yaml::HIGHLIGHTS_QUERY,
-            ),
-        )));
-
-        language_configs.push(Arc::new(LanguageConfig::new(
-            "html",
-            vec!["html"],
-            tree_sitter_html::LANGUAGE.into(),
-            Some(Self::load_query(
-                &tree_sitter_html::LANGUAGE.into(),
-                tree_sitter_html::INJECTIONS_QUERY,
+            Arc::new(LanguageConfig::new(
+                "markdown_inline",
+                vec![],
+                tree_sitter_md::INLINE_LANGUAGE.into(),
+                None,
+                Self::load_query(
+                    &tree_sitter_md::INLINE_LANGUAGE.into(),
+                    include_str!("../../languages/markdown-inline/highlights.scm"),
+                ),
             )),
-            Self::load_query(
-                &tree_sitter_html::LANGUAGE.into(),
-                tree_sitter_html::HIGHLIGHTS_QUERY,
-            ),
-        )));
+            Arc::new(LanguageConfig::new(
+                "yml",
+                vec!["yaml", "yml"],
+                tree_sitter_yaml::LANGUAGE.into(),
+                None,
+                Self::load_query(
+                    &tree_sitter_yaml::LANGUAGE.into(),
+                    tree_sitter_yaml::HIGHLIGHTS_QUERY,
+                ),
+            )),
+            Arc::new(LanguageConfig::new(
+                "html",
+                vec!["html"],
+                tree_sitter_html::LANGUAGE.into(),
+                Some(Self::load_query(
+                    &tree_sitter_html::LANGUAGE.into(),
+                    tree_sitter_html::INJECTIONS_QUERY,
+                )),
+                Self::load_query(
+                    &tree_sitter_html::LANGUAGE.into(),
+                    tree_sitter_html::HIGHLIGHTS_QUERY,
+                ),
+            )),
+        ];
 
         Self { language_configs }
     }

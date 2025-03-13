@@ -30,7 +30,7 @@ impl TitleBar {
 
     fn title(&self, cx: &ViewContext<Self>) -> String {
         let Some(text_input) = self.text_input.upgrade() else {
-            return "".into();
+            return String::new();
         };
 
         let text_input = text_input.read(cx);

@@ -5,13 +5,16 @@ use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     Connection, ToSql,
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 use uuid::Uuid;
 
 use crate::paths::app_data_path;
 
 pub struct DB {
-    connection: Arc<Connection>,
+    connection: Rc<Connection>,
 }
 
 #[derive(Debug)]
@@ -25,7 +28,7 @@ struct Migration {
     statement: &'static str,
 }
 
-const MIGRATIONS: &'static [Migration] = &[
+const MIGRATIONS: &[Migration] = &[
     Migration {
         migration: "0_create_window_positions",
         statement: "CREATE TABLE window_positions (
@@ -90,7 +93,7 @@ impl DB {
         Self::cleanup(&connection)?;
 
         let this = Self {
-            connection: Arc::new(connection),
+            connection: Rc::new(connection),
         };
 
         cx.set_global::<DB>(this);
@@ -98,7 +101,7 @@ impl DB {
         Ok(())
     }
 
-    pub fn window_position(&self, file_path: &PathBuf) -> Option<Vec<WindowPosition>> {
+    pub fn window_position(&self, file_path: &Path) -> Option<Vec<WindowPosition>> {
         let file_path_str = file_path.to_str()?;
 
         let mut stmt = self
@@ -127,7 +130,7 @@ impl DB {
 
     pub fn update_window_position(
         &self,
-        file_path: &PathBuf,
+        file_path: &Path,
         display_id: Uuid,
         bounds: Bounds<Pixels>,
     ) {
@@ -135,15 +138,11 @@ impl DB {
             return;
         };
 
-        let display_id = MyUuid { 0: display_id };
-        let origin_x = MyPixels { 0: bounds.origin.x };
-        let origin_y = MyPixels { 0: bounds.origin.y };
-        let size_width = MyPixels {
-            0: bounds.size.width,
-        };
-        let size_height = MyPixels {
-            0: bounds.size.height,
-        };
+        let display_id = MyUuid(display_id);
+        let origin_x = MyPixels(bounds.origin.x);
+        let origin_y = MyPixels(bounds.origin.y);
+        let size_width = MyPixels(bounds.size.width);
+        let size_height = MyPixels(bounds.size.height);
 
         _ = self.connection.execute("
             INSERT INTO window_positions (file_path, display_id, origin_x, origin_y, size_width, size_height)
@@ -153,7 +152,7 @@ impl DB {
             ", params![file_path_str, display_id, origin_x, origin_y, size_width, size_height]);
     }
 
-    pub fn path_settings(&self, file_path: &PathBuf) -> Option<PathSettings> {
+    pub fn path_settings(&self, file_path: &Path) -> Option<PathSettings> {
         let file_path_str = file_path.to_str()?;
 
         self.connection
@@ -169,7 +168,7 @@ impl DB {
             .ok()
     }
 
-    pub fn update_path_settings(&self, file_path: &PathBuf, word_wrap: bool) -> &Self {
+    pub fn update_path_settings(&self, file_path: &Path, word_wrap: bool) -> &Self {
         let Some(file_path_str) = file_path.to_str() else {
             return self;
         };
@@ -192,7 +191,7 @@ impl DB {
             .query_row(
                 "SELECT content FROM tmp_files WHERE file_id = ?1",
                 params![file_id],
-                |row| Ok(row.get(0)?),
+                |row| row.get(0),
             )
             .ok()
     }
@@ -236,7 +235,7 @@ impl DB {
     }
 
     pub fn open_windows_add(&self, file_id: Option<MyUuid>, file_path: Option<&PathBuf>) -> MyUuid {
-        let file_id = file_id.unwrap_or(MyUuid { 0: Uuid::new_v4() });
+        let file_id = file_id.unwrap_or(MyUuid(Uuid::new_v4()));
 
         if let Some(file_path_str) = file_path.map(|f| f.to_str()) {
             _ = self.connection.execute(
@@ -330,9 +329,7 @@ pub struct MyPixels(Pixels);
 impl FromSql for MyPixels {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let value = value.as_f64()?;
-        Ok(MyPixels {
-            0: Pixels { 0: value as f32 },
-        })
+        Ok(MyPixels(Pixels(value as f32)))
     }
 }
 
@@ -352,9 +349,7 @@ impl FromSql for MyUuid {
             return Err(FromSqlError::InvalidType);
         };
 
-        Ok(MyUuid {
-            0: Uuid::from_bytes(arr),
-        })
+        Ok(MyUuid(Uuid::from_bytes(arr)))
     }
 }
 

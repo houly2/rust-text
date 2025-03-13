@@ -221,7 +221,7 @@ impl TextElement {
         let text = RopeProvider(rope_slice);
 
         let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&query, tree.root_node(), text);
+        let mut matches = cursor.matches(query, tree.root_node(), text);
 
         let mut injections = Vec::new();
 
@@ -232,7 +232,7 @@ impl TextElement {
             if injection_capture.is_none() {
                 for prop in query.property_settings(mat.pattern_index) {
                     if prop.key.as_ref() == "injection.language" {
-                        injection_capture = prop.value.as_ref().map(|s| s.as_ref().into());
+                        injection_capture = prop.value.as_ref().map(|s| s.as_ref());
                     }
                 }
             }
@@ -245,7 +245,7 @@ impl TextElement {
                     let r = content_node.range().start_byte..content_node.range().end_byte;
                     injections.push((lang_config, r));
                 } else {
-                    println!("missing language: {}", injection_capture);
+                    println!("missing language: {injection_capture}");
                 }
             }
         }
@@ -259,14 +259,14 @@ impl TextElement {
         name: Option<&str>,
         base_run: &TextRun,
     ) -> Option<TextRun> {
-        let Some(name) = name else { return None };
+        let name = name?;
         let base_run = TextRun {
             len: node.end_byte() - node.start_byte(),
             ..base_run.clone()
         };
 
         match name {
-            "punctuation.special" => Some(TextRun {
+            "text.strong" | "punctuation.special" => Some(TextRun {
                 font: base_run.font.bold(),
                 ..base_run
             }),
@@ -277,10 +277,6 @@ impl TextElement {
             }),
             "text.emphasis" => Some(TextRun {
                 font: base_run.font.italic(),
-                ..base_run
-            }),
-            "text.strong" => Some(TextRun {
-                font: base_run.font.bold(),
                 ..base_run
             }),
             "punctuation.delimiter" | "punctuation.bracket" => Some(TextRun {
@@ -300,8 +296,8 @@ impl TextElement {
                 ..base_run
             }),
             _ => {
-                println!("missing: {} in {:?}", name, node);
-                return None;
+                println!("missing: {name} in {node:?}");
+                None
             }
         }
     }
@@ -371,7 +367,7 @@ impl Element for TextElement {
         &mut self,
         _: Option<&GlobalElementId>,
         bounds: Bounds<Pixels>,
-        _: &mut Self::RequestLayoutState,
+        (): &mut Self::RequestLayoutState,
         cx: &mut WindowContext,
     ) -> Self::PrepaintState {
         let input = self.input.read(cx);
@@ -410,7 +406,7 @@ impl Element for TextElement {
 
             let md_query = markdown.injection_query.as_ref().unwrap();
             let configs = self.query_tree(
-                &md_query,
+                md_query,
                 &tree,
                 &run,
                 display_text.slice(..),
@@ -469,7 +465,7 @@ impl Element for TextElement {
                                         .highlight_query
                                         .capture_names()
                                         .get(cap.index as usize)
-                                        .map(|n| *n),
+                                        .copied(),
                                     &run,
                                 ) {
                                     if range.start + cap.node.start_byte() > last_end {
@@ -503,7 +499,7 @@ impl Element for TextElement {
                             .highlight_query
                             .capture_names()
                             .get(cap.index as usize)
-                            .map(|n| *n),
+                            .copied(),
                         &run,
                     ) {
                         if cap.node.start_byte() > last_end {
@@ -645,7 +641,7 @@ impl Element for TextElement {
         &mut self,
         _: Option<&GlobalElementId>,
         bounds: Bounds<Pixels>,
-        _: &mut Self::RequestLayoutState,
+        (): &mut Self::RequestLayoutState,
         prepaint: &mut Self::PrepaintState,
         cx: &mut WindowContext,
     ) {
